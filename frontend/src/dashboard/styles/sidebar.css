@@ -1,0 +1,260 @@
+/**
+ * Sidebar Styles - Professional SaaS Design
+ */
+
+.sidebar {
+  width: 260px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06);
+  transition: width 0.3s ease;
+  z-index: 1000;
+}
+
+.sidebar.collapsed {
+  width: 80px;
+}
+
+/* ===== Header ===== */
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.logo-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.logo-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.4px;
+  line-height: 1.2;
+}
+
+.logo-subtitle {
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #64748b;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toggle-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* ===== Navigation ===== */
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: #475569;
+  transition: all 0.15s ease;
+  text-align: left;
+  font-weight: 500;
+  position: relative;
+}
+
+.menu-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.menu-item.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.menu-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #ffffff;
+  border-radius: 0 2px 2px 0;
+}
+
+.menu-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.menu-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar.collapsed .menu-label {
+  display: none;
+}
+
+/* ===== Scrollbar en Nav ===== */
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ===== Footer ===== */
+
+.sidebar-footer {
+  padding: 12px 10px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  background: #f0fdf4;
+  border-radius: 6px;
+  border: 1px solid #dcfce7;
+  width: 100%;
+  justify-content: center;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-text {
+  font-size: 0.8rem;
+  color: #047857;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .status-text {
+  display: none;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 2000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: 240px;
+  }
+
+  .sidebar.collapsed {
+    width: 70px;
+  }
+
+  .logo-icon {
+    font-size: 1.5rem;
+  }
+
+  .logo-title {
+    font-size: 0.75rem;
+  }
+
+  .logo-subtitle {
+    font-size: 0.65rem;
+  }
+}

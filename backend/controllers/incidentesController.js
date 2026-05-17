@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { emitEvent } = require('../socket');
 
 // Listar incidentes recientes
 exports.listIncidentes = async (req, res, next) => {
@@ -36,6 +37,18 @@ exports.createIncidente = async (req, res, next) => {
       'INSERT INTO incidentes (id_envio, id_registro_telemetria, tipo_incidente, valor_registrado, valor_limite, descripcion, origen_evento, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [id_envio, id_registro_telemetria, tipo_incidente, valor_registrado, valor_limite, descripcion, origen_evento, metadataPayload]
     );
+    emitEvent('incident:new', {
+      id_incidente: result.insertId,
+      id_envio,
+      id_registro_telemetria,
+      tipo_incidente,
+      valor_registrado,
+      valor_limite,
+      descripcion,
+      origen_evento,
+      metadata_json: metadataPayload,
+      server_timestamp: new Date().toISOString(),
+    });
     res.status(201).json({ id_incidente: result.insertId });
   } catch (err) {
     next(err);

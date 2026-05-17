@@ -1,0 +1,144 @@
+================================================================================
+           MANUAL DE INSTALACION Y VALIDACION - SUPPLYCHAIN PRO
+================================================================================
+
+Objetivo
+Este manual es para companeros que van a hacer merge y necesitan levantar el
+proyecto completo en local usando Docker, validar puertos y autenticarse en
+Frontend/Swagger sin perder tiempo.
+
+Fecha de actualizacion: 12 de mayo de 2026
+
+
+1) Requisitos previos
+-------------------------------------------------------------------------------
+1. Tener instalado Docker Desktop (con Docker Compose v2).
+2. Tener Git instalado.
+3. Tener puertos libres en el host: 5001, 5173 y 8080.
+
+
+2) Flujo recomendado antes de hacer merge
+-------------------------------------------------------------------------------
+Desde la raiz del proyecto:
+
+1. Verificar rama actual y cambios locales:
+   git status
+
+2. Traer cambios remotos:
+   git fetch --all --prune
+
+3. Actualizar tu rama de trabajo:
+   git checkout TU_RAMA
+   git pull
+
+4. Hacer merge de la rama objetivo (ejemplo):
+   git merge origin/eyleen
+
+5. Si hay conflictos, resolver y luego:
+   git add .
+   git commit
+
+Nota: Si quieres una base limpia de contenedores antes de validar:
+docker compose down
+
+
+
+3) Instalación y arranque (moved to README.md)
+-------------------------------------------------------------------------------
+Las instrucciones sobre configuración inicial, arranque con Docker y descripción de
+puertos han sido movidas a `README.md` para facilitar su lectura y renderizado.
+
+Por favor, consulta [README.md](README.md) para la guía de instalación rápida,
+comandos de arranque y validación.
+
+Nota: `Manual.txt` conserva las **Credenciales de acceso** y las notas de soporte.
+
+
+6) Credenciales de acceso
+-------------------------------------------------------------------------------
+Frontend y login de API (admins de prueba):
+
+Admin 1
+- Correo: admin@local.test
+- Contrasena: admin123
+
+Test 1
+- Correo: test@admin.com
+- Contrasena: test123456
+
+phpMyAdmin:
+- Host: supplychainpro-db
+- Usuario: valor de DB_USER en .env
+- Contrasena: valor de DB_PASSWORD en .env
+- Base de datos: valor de DB_NAME en .env
+
+Nota: Si no existen usuarios admin en la BD, crear uno con script de seed
+definiendo ADMIN_EMAIL y ADMIN_PASSWORD antes de ejecutarlo.
+
+
+7) Como validar rapido que todo quedo bien
+-------------------------------------------------------------------------------
+1. Backend vivo:
+   curl -s http://localhost:5001/health
+
+2. Base de datos conectada:
+   curl -s http://localhost:5001/health/db
+
+3. Frontend visible:
+   abrir http://localhost:5173
+
+4. Swagger visible:
+   abrir http://localhost:5001/api-docs
+
+5. Login por API (ejemplo):
+   curl -X POST http://localhost:5001/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"correo":"admin@local.test","contrasena":"admin123"}'
+
+
+8) Como autenticarse en Swagger (paso a paso)
+-------------------------------------------------------------------------------
+1. Abrir: http://localhost:5001/api-docs
+2. Ejecutar POST /api/auth/login con credenciales de admin.
+3. Copiar el token JWT de la respuesta.
+4. Click en Authorize.
+5. Pegar token en formato:
+   Bearer TU_TOKEN
+6. Confirmar Authorize y probar endpoints protegidos.
+
+
+9) Comandos utiles para soporte
+-------------------------------------------------------------------------------
+Ver contenedores y puertos:
+docker compose ps
+
+Ver logs de un servicio puntual:
+docker compose logs -f supplychainpro-backend
+docker compose logs -f supplychainpro-frontend
+
+Recrear solo backend (si cambiaste codigo backend):
+docker compose up -d --build supplychainpro-backend
+
+Apagar todo:
+docker compose down
+
+Apagar y borrar volumen (reinicio total de datos):
+docker compose down -v
+
+
+10) Errores comunes
+-------------------------------------------------------------------------------
+Error de CORS desde frontend:
+- Verificar que CORS_ORIGINS incluya http://localhost:5173.
+
+No levanta backend por DB:
+- Esperar healthcheck de MySQL.
+- Revisar DB_USER, DB_PASSWORD y DB_NAME en .env.
+- Si cambiaste DB_PASSWORD o DB_ROOT_PASSWORD y ya habia volumen creado,
+  recrear DB: docker compose down -v && docker compose up -d --build
+
+No abre frontend en 5173:
+- Revisar que el puerto 5173 este libre.
+- Ejecutar docker compose ps y revisar estado del servicio frontend.
+
+================================================================================

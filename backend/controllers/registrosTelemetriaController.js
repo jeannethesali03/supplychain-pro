@@ -1,12 +1,40 @@
 const db = require('../config/db');
+const { emitEvent } = require('../socket');
+
+const toMysqlTimestamp = (value) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
 
 exports.createRegistro = async (req, res, next) => {
   try {
     const { id_envio, latitud, longitud, temperatura, humedad, porcentaje_bateria, marca_tiempo_dispositivo } = req.body;
+    if (
+      id_envio === undefined || id_envio === null ||
+      latitud === undefined || latitud === null ||
+      longitud === undefined || longitud === null ||
+      temperatura === undefined || temperatura === null ||
+      Number.isNaN(Number(temperatura))
+    ) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios de telemetria' });
+    }
+    const timestamp = toMysqlTimestamp(marca_tiempo_dispositivo) || toMysqlTimestamp(new Date());
     const [result] = await db.query(
       'INSERT INTO registros_telemetria (id_envio, latitud, longitud, temperatura, humedad, porcentaje_bateria, marca_tiempo_dispositivo) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id_envio, latitud, longitud, temperatura, humedad, porcentaje_bateria, marca_tiempo_dispositivo]
+      [id_envio, latitud, longitud, temperatura, humedad, porcentaje_bateria, timestamp]
     );
+    emitEvent('telemetry:new', {
+      id_registro_telemetria: result.insertId,
+      id_envio,
+      latitud,
+      longitud,
+      temperatura,
+      humedad,
+      porcentaje_bateria,
+      marca_tiempo_dispositivo,
+      server_timestamp: new Date().toISOString(),
+    });
     res.status(201).json({ id_registro_telemetria: result.insertId });
   } catch (err) { next(err); }
 };

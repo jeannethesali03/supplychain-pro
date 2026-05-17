@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { activeJourneys, iniciarViaje, finalizarViaje, iniciarTelemetria } = require('../controllers/journeyController');
+const { activeJourneys, iniciarViaje, finalizarViaje, iniciarTelemetria, persistJourneys } = require('../controllers/journeyController');
 
 /**
  * GET /api/simulator/health
@@ -102,9 +102,11 @@ router.post('/:id_envio/pause', (req, res) => {
     clearInterval(journey.telemetryInterval);
     journey.telemetryInterval = null;
     journey.pausedTime = Date.now();
+    journey.elapsedSeconds = (journey.pausedTime - journey.startTime) / 1000;
   }
 
   journey.estado = 'PAUSADO';
+  persistJourneys();
   console.log(`⏸ Viaje pausado: ${id_envio}`);
 
   res.json({ success: true, mensaje: 'Viaje pausado' });
@@ -123,11 +125,12 @@ router.post('/:id_envio/resume', (req, res) => {
   }
 
   if (journey.pausedTime) {
-    journey.startTime += Date.now() - journey.pausedTime;
+    journey.startTime = Date.now() - (journey.elapsedSeconds || 0) * 1000;
     journey.pausedTime = null;
   }
 
   journey.estado = 'EN_PROGRESO';
+  persistJourneys();
   iniciarTelemetria(Number(id_envio));
   console.log(`▶ Viaje reanudado: ${id_envio}`);
 
@@ -148,6 +151,7 @@ router.post('/:id_envio/stop', (req, res) => {
 
   finalizarViaje(Number(id_envio));
   activeJourneys.delete(Number(id_envio));
+  persistJourneys();
 
   res.json({ success: true, mensaje: 'Viaje detenido' });
 });

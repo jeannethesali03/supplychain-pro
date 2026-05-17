@@ -1,0 +1,144 @@
+name: SupplyChain Pro - CI Build
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  push: {}
+  pull_request: {}
+
+jobs:
+  # ========== PARALLEL JOBS: Node.js Validation ==========
+
+  validate-backend:
+    name: Validate Backend (Lint + Tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies (with cache)
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./backend
+        run: npm run lint --silent
+
+      - name: Run Tests
+        working-directory: ./backend
+        run: npm test
+
+  validate-frontend:
+    name: Validate Frontend (Build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (with cache)
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Build Application
+        working-directory: ./frontend
+        run: npm run build
+
+  validate-simulator:
+    name: Validate Simulator (Lint + Tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: simulator/package-lock.json
+
+      - name: Install dependencies (with cache)
+        working-directory: ./simulator
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./simulator
+        run: npm run lint --silent
+
+      - name: Run Tests
+        working-directory: ./simulator
+        run: npm test
+
+  # ========== PARALLEL JOBS: Docker Builds (depends on validation jobs) ==========
+
+  build-docker-images:
+    name: Build Docker Image (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: [validate-backend, validate-frontend, validate-simulator]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, simulator, frontend]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} image with cache
+        run: |
+          docker buildx build \
+            --cache-from type=gha,scope=supplychainpro-${{ matrix.service }} \
+            --cache-to type=gha,mode=max,scope=supplychainpro-${{ matrix.service }} \
+            -t supplychainpro-${{ matrix.service }}:ci \
+            ./${{ matrix.service }}
+
+  validate-compose:
+    name: Validate docker-compose
+    runs-on: ubuntu-latest
+    needs: [build-docker-images]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env for CI
+        run: |
+          cat > .env << 'EOF'
+          DB_HOST=localhost
+          DB_PORT=3306
+          DB_NAME=supplychain_db
+          DB_USER=supplychain_user
+          DB_PASSWORD=supplychain_pass
+          DB_ROOT_PASSWORD=supplychain_root_pass
+          PORT=5000
+          JWT_SECRET=ci_test_secret_do_not_use_in_prod
+          BACKEND_URL=http://localhost:5000
+          NODE_ENV=test
+          ADMIN_EMAIL=admin@test.local
+          ADMIN_PASSWORD=admin123
+          SIM_STATE_PATH=/data
+          SIMULATOR_URL=http://localhost:5002
+          EOF
+
+      - name: Validate docker-compose file
+        run: docker compose config

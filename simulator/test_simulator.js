@@ -3,19 +3,19 @@
  * Uso: node test_simulator.js
  */
 
-const axios = require('axios');
+const axios = require("axios");
 
-const SIMULATOR_URL = 'http://localhost:3001';
-const BACKEND_URL = 'http://localhost:3000';
+const SIMULATOR_URL = "http://localhost:3001";
+const BACKEND_URL = "http://localhost:3000";
 
 // Configuración de colores para consola
 const colors = {
-  reset: '\x1b[0m',
-  green: '\x1b[32m',
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m'
+  reset: "\x1b[0m",
+  green: "\x1b[32m",
+  red: "\x1b[31m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
 };
 
 function log(color, message) {
@@ -27,11 +27,11 @@ function log(color, message) {
  */
 async function verificarSimulador() {
   try {
-    const response = await axios.get(`${SIMULATOR_URL}/api/simulator/health`);
-    log(colors.green, '✓ Simulador en línea');
+    await axios.get(`${SIMULATOR_URL}/api/simulator/health`);
+    log(colors.green, "✓ Simulador en línea");
     return true;
   } catch (error) {
-    log(colors.red, '✗ Simulador no disponible en ' + SIMULATOR_URL);
+    log(colors.red, "✗ Simulador no disponible en " + SIMULATOR_URL);
     return false;
   }
 }
@@ -43,39 +43,42 @@ async function crearRuta() {
   try {
     // Primero, obtener un token (para poder hacer la llamada)
     const loginResponse = await axios.post(`${BACKEND_URL}/api/auth/login`, {
-      correo: 'admin@local.test',
-      contrasena: 'AdminPass123!'
+      correo: "admin@local.test",
+      contrasena: "AdminPass123!",
     });
 
     const token = loginResponse.data.token;
 
     const rutaPayload = {
-      nombre: 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)',
+      nombre: "Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)",
       waypoints_json: [
-        { lat: 13.6800, lng: -89.2300 },
-        { lat: 13.6750, lng: -89.2350 },
-        { lat: 13.6700, lng: -89.2400 },
-        { lat: 13.6650, lng: -89.2450 },
-        { lat: 13.6600, lng: -89.2500 },
-        { lat: 13.6550, lng: -89.2530 },
-        { lat: 13.6500, lng: -89.2560 },
-        { lat: 13.6450, lng: -89.2580 },
-        { lat: 13.6400, lng: -89.2600 },
-        { lat: 13.6300, lng: -89.2630 },
-        { lat: 13.6200, lng: -89.2660 },
-        { lat: 13.6100, lng: -89.2700 }
-      ]
+        { lat: 13.68, lng: -89.23 },
+        { lat: 13.675, lng: -89.235 },
+        { lat: 13.67, lng: -89.24 },
+        { lat: 13.665, lng: -89.245 },
+        { lat: 13.66, lng: -89.25 },
+        { lat: 13.655, lng: -89.253 },
+        { lat: 13.65, lng: -89.256 },
+        { lat: 13.645, lng: -89.258 },
+        { lat: 13.64, lng: -89.26 },
+        { lat: 13.63, lng: -89.263 },
+        { lat: 13.62, lng: -89.266 },
+        { lat: 13.61, lng: -89.27 },
+      ],
     };
 
     const response = await axios.post(`${BACKEND_URL}/api/rutas`, rutaPayload, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     const id_ruta = response.data.id_ruta;
     log(colors.green, `✓ Ruta creada con ID: ${id_ruta}`);
     return id_ruta;
   } catch (error) {
-    log(colors.red, `✗ Error creando ruta: ${error.response?.data?.error || error.message}`);
+    log(
+      colors.red,
+      `✗ Error creando ruta: ${error.response?.data?.error || error.message}`,
+    );
     return null;
   }
 }
@@ -87,8 +90,8 @@ async function crearEnvio(id_ruta) {
   try {
     // Obtener token
     const loginResponse = await axios.post(`${BACKEND_URL}/api/auth/login`, {
-      correo: 'admin@local.test',
-      contrasena: 'AdminPass123!'
+      correo: "admin@local.test",
+      contrasena: "AdminPass123!",
     });
 
     const token = loginResponse.data.token;
@@ -98,24 +101,31 @@ async function crearEnvio(id_ruta) {
 
     const envioPayload = {
       codigo_rastreo,
-      origen: 'San Salvador',
-      destino: 'Puerto de La Libertad',
+      origen: "San Salvador",
+      destino: "Puerto de La Libertad",
       id_ruta,
       temp_max_permitida: 5.0,
       temp_min_permitida: 0.0,
-      estado: 'EN_TRANSITO'
+      estado: "EN_TRANSITO",
     };
 
-    const response = await axios.post(`${BACKEND_URL}/api/envios`, envioPayload, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await axios.post(
+      `${BACKEND_URL}/api/envios`,
+      envioPayload,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
 
     const id_envio = response.data.id_envio;
     log(colors.green, `✓ Envío creado con ID: ${id_envio}`);
     log(colors.cyan, `   Código de rastreo: ${codigo_rastreo}`);
     return id_envio;
   } catch (error) {
-    log(colors.red, `✗ Error creando envío: ${error.response?.data?.error || error.message}`);
+    log(
+      colors.red,
+      `✗ Error creando envío: ${error.response?.data?.error || error.message}`,
+    );
     return null;
   }
 }
@@ -127,8 +137,8 @@ async function crearVehiculo() {
   try {
     // Obtener token
     const loginResponse = await axios.post(`${BACKEND_URL}/api/auth/login`, {
-      correo: 'admin@local.test',
-      contrasena: 'AdminPass123!'
+      correo: "admin@local.test",
+      contrasena: "AdminPass123!",
     });
 
     const token = loginResponse.data.token;
@@ -137,19 +147,26 @@ async function crearVehiculo() {
 
     const vehiculoPayload = {
       placa,
-      activo: true
+      activo: true,
     };
 
-    const response = await axios.post(`${BACKEND_URL}/api/vehiculos`, vehiculoPayload, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await axios.post(
+      `${BACKEND_URL}/api/vehiculos`,
+      vehiculoPayload,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
 
     const id_vehiculo = response.data.id_vehiculo;
     log(colors.green, `✓ Vehículo creado con ID: ${id_vehiculo}`);
     log(colors.cyan, `   Placa: ${placa}`);
     return id_vehiculo;
   } catch (error) {
-    log(colors.red, `✗ Error creando vehículo: ${error.response?.data?.error || error.message}`);
+    log(
+      colors.red,
+      `✗ Error creando vehículo: ${error.response?.data?.error || error.message}`,
+    );
     return null;
   }
 }
@@ -161,24 +178,30 @@ async function asignarVehiculo(id_envio, id_vehiculo) {
   try {
     // Obtener token
     const loginResponse = await axios.post(`${BACKEND_URL}/api/auth/login`, {
-      correo: 'admin@local.test',
-      contrasena: 'AdminPass123!'
+      correo: "admin@local.test",
+      contrasena: "AdminPass123!",
     });
 
     const token = loginResponse.data.token;
 
     const payload = {
       id_envio,
-      id_vehiculo
+      id_vehiculo,
     };
 
     await axios.post(`${BACKEND_URL}/api/envios-vehiculos`, payload, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    log(colors.green, `✓ Vehículo ${id_vehiculo} asignado al envío ${id_envio}`);
+    log(
+      colors.green,
+      `✓ Vehículo ${id_vehiculo} asignado al envío ${id_envio}`,
+    );
   } catch (error) {
-    log(colors.red, `✗ Error asignando vehículo: ${error.response?.data?.error || error.message}`);
+    log(
+      colors.red,
+      `✗ Error asignando vehículo: ${error.response?.data?.error || error.message}`,
+    );
   }
 }
 
@@ -192,14 +215,17 @@ async function iniciarViaje(id_envio, id_ruta, waypoints) {
       id_ruta,
       temp_min_permitida: 0.0,
       temp_max_permitida: 5.0,
-      waypoints
+      waypoints,
     };
 
-    const response = await axios.post(`${SIMULATOR_URL}/api/simulator/journeys/start`, payload);
+    await axios.post(`${SIMULATOR_URL}/api/simulator/journeys/start`, payload);
     log(colors.green, `✓ Viaje iniciado para envío ${id_envio}`);
     return true;
   } catch (error) {
-    log(colors.red, `✗ Error iniciando viaje: ${error.response?.data?.error || error.message}`);
+    log(
+      colors.red,
+      `✗ Error iniciando viaje: ${error.response?.data?.error || error.message}`,
+    );
     return false;
   }
 }
@@ -209,21 +235,38 @@ async function iniciarViaje(id_envio, id_ruta, waypoints) {
  */
 async function obtenerEstadoViaje(id_envio) {
   try {
-    const response = await axios.get(`${SIMULATOR_URL}/api/simulator/journeys/${id_envio}`);
+    const response = await axios.get(
+      `${SIMULATOR_URL}/api/simulator/journeys/${id_envio}`,
+    );
     const data = response.data;
 
     log(colors.cyan, `\n📊 Estado del viaje (envío ${id_envio}):`);
     log(colors.cyan, `   - Estado: ${data.estado}`);
     log(colors.cyan, `   - Progreso: ${data.progreso.toFixed(1)}%`);
-    log(colors.cyan, `   - Tiempo: ${data.tiempo_transcurrido_seg}s / ${data.duracion_total_seg}s`);
-    log(colors.cyan, `   - Temperatura: ${data.telemetria_actual.temperatura.toFixed(2)}°C`);
-    log(colors.cyan, `   - Humedad: ${data.telemetria_actual.humedad.toFixed(1)}%`);
-    log(colors.cyan, `   - Batería: ${data.telemetria_actual.porcentaje_bateria.toFixed(0)}%`);
+    log(
+      colors.cyan,
+      `   - Tiempo: ${data.tiempo_transcurrido_seg}s / ${data.duracion_total_seg}s`,
+    );
+    log(
+      colors.cyan,
+      `   - Temperatura: ${data.telemetria_actual.temperatura.toFixed(2)}°C`,
+    );
+    log(
+      colors.cyan,
+      `   - Humedad: ${data.telemetria_actual.humedad.toFixed(1)}%`,
+    );
+    log(
+      colors.cyan,
+      `   - Batería: ${data.telemetria_actual.porcentaje_bateria.toFixed(0)}%`,
+    );
     log(colors.cyan, `   - Incidentes: ${data.incidentes.length}`);
 
     return data;
   } catch (error) {
-    log(colors.red, `✗ Error obteniendo estado: ${error.response?.data?.error || error.message}`);
+    log(
+      colors.red,
+      `✗ Error obteniendo estado: ${error.response?.data?.error || error.message}`,
+    );
     return null;
   }
 }
@@ -233,8 +276,13 @@ async function obtenerEstadoViaje(id_envio) {
  */
 async function crearIncidenteTemperatura(id_envio) {
   try {
-    await axios.post(`${SIMULATOR_URL}/api/simulator/incidents/${id_envio}/temperatura-alta`);
-    log(colors.red, `🔴 Incidente de temperatura alta creado para envío ${id_envio}`);
+    await axios.post(
+      `${SIMULATOR_URL}/api/simulator/incidents/${id_envio}/temperatura-alta`,
+    );
+    log(
+      colors.red,
+      `🔴 Incidente de temperatura alta creado para envío ${id_envio}`,
+    );
   } catch (error) {
     log(colors.red, `✗ Error creando incidente: ${error.message}`);
   }
@@ -245,8 +293,13 @@ async function crearIncidenteTemperatura(id_envio) {
  */
 async function crearIncidenteBateria(id_envio) {
   try {
-    await axios.post(`${SIMULATOR_URL}/api/simulator/incidents/${id_envio}/bateria-baja`);
-    log(colors.red, `🔴 Incidente de batería baja creado para envío ${id_envio}`);
+    await axios.post(
+      `${SIMULATOR_URL}/api/simulator/incidents/${id_envio}/bateria-baja`,
+    );
+    log(
+      colors.red,
+      `🔴 Incidente de batería baja creado para envío ${id_envio}`,
+    );
   } catch (error) {
     log(colors.red, `✗ Error creando incidente: ${error.message}`);
   }
@@ -258,19 +311,24 @@ async function crearIncidenteBateria(id_envio) {
 async function obtenerIncidentes(id_envio) {
   try {
     const loginResponse = await axios.post(`${BACKEND_URL}/api/auth/login`, {
-      correo: 'admin@local.test',
-      contrasena: 'AdminPass123!'
+      correo: "admin@local.test",
+      contrasena: "AdminPass123!",
     });
 
     const token = loginResponse.data.token;
 
     const response = await axios.get(`${BACKEND_URL}/api/incidentes`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    const incidentesEnvio = response.data.filter(i => i.id_envio === id_envio);
-    log(colors.blue, `\n🚨 Incidentes registrados (${incidentesEnvio.length}):`);
-    incidentesEnvio.forEach(i => {
+    const incidentesEnvio = response.data.filter(
+      (i) => i.id_envio === id_envio,
+    );
+    log(
+      colors.blue,
+      `\n🚨 Incidentes registrados (${incidentesEnvio.length}):`,
+    );
+    incidentesEnvio.forEach((i) => {
       log(colors.blue, `   - ${i.tipo_incidente}: ${i.descripcion}`);
     });
 
@@ -285,82 +343,82 @@ async function obtenerIncidentes(id_envio) {
  * Flujo de prueba completo
  */
 async function flujoCompleto() {
-  log(colors.yellow, '\n========================================');
-  log(colors.yellow, 'PRUEBA COMPLETA DEL SIMULADOR');
-  log(colors.yellow, '========================================\n');
+  log(colors.yellow, "\n========================================");
+  log(colors.yellow, "PRUEBA COMPLETA DEL SIMULADOR");
+  log(colors.yellow, "========================================\n");
 
   // 1. Verificar simulador
   const simuladorOk = await verificarSimulador();
   if (!simuladorOk) process.exit(1);
 
   // 2. Crear ruta
-  log(colors.yellow, '\n📍 Creando ruta...');
+  log(colors.yellow, "\n📍 Creando ruta...");
   const waypoints = [
-    { lat: 13.6800, lng: -89.2300 },
-    { lat: 13.6750, lng: -89.2350 },
-    { lat: 13.6700, lng: -89.2400 },
-    { lat: 13.6650, lng: -89.2450 },
-    { lat: 13.6600, lng: -89.2500 },
-    { lat: 13.6550, lng: -89.2530 },
-    { lat: 13.6500, lng: -89.2560 },
-    { lat: 13.6450, lng: -89.2580 },
-    { lat: 13.6400, lng: -89.2600 },
-    { lat: 13.6300, lng: -89.2630 },
-    { lat: 13.6200, lng: -89.2660 },
-    { lat: 13.6100, lng: -89.2700 }
+    { lat: 13.68, lng: -89.23 },
+    { lat: 13.675, lng: -89.235 },
+    { lat: 13.67, lng: -89.24 },
+    { lat: 13.665, lng: -89.245 },
+    { lat: 13.66, lng: -89.25 },
+    { lat: 13.655, lng: -89.253 },
+    { lat: 13.65, lng: -89.256 },
+    { lat: 13.645, lng: -89.258 },
+    { lat: 13.64, lng: -89.26 },
+    { lat: 13.63, lng: -89.263 },
+    { lat: 13.62, lng: -89.266 },
+    { lat: 13.61, lng: -89.27 },
   ];
 
   const id_ruta = await crearRuta();
   if (!id_ruta) process.exit(1);
 
   // 3. Crear envío
-  log(colors.yellow, '\n📦 Creando envío...');
+  log(colors.yellow, "\n📦 Creando envío...");
   const id_envio = await crearEnvio(id_ruta);
   if (!id_envio) process.exit(1);
 
   // 4. Crear vehículo
-  log(colors.yellow, '\n🚛 Creando vehículo...');
+  log(colors.yellow, "\n🚛 Creando vehículo...");
   const id_vehiculo = await crearVehiculo();
   if (!id_vehiculo) process.exit(1);
 
   // 5. Asignar vehículo
-  log(colors.yellow, '\n🔗 Asignando vehículo...');
+  log(colors.yellow, "\n🔗 Asignando vehículo...");
   await asignarVehiculo(id_envio, id_vehiculo);
 
   // 6. Iniciar viaje
-  log(colors.yellow, '\n🚀 Iniciando viaje...');
+  log(colors.yellow, "\n🚀 Iniciando viaje...");
   const viajeIniciado = await iniciarViaje(id_envio, id_ruta, waypoints);
   if (!viajeIniciado) process.exit(1);
 
   // 7. Monitorear viaje por 30 segundos
-  log(colors.yellow, '\n⏱ Monitoreando viaje (30 segundos)...\n');
+  log(colors.yellow, "\n⏱ Monitoreando viaje (30 segundos)...\n");
 
   for (let i = 0; i < 6; i++) {
-    await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
-    const estado = await obtenerEstadoViaje(id_envio);
+    await new Promise((resolve) => setTimeout(resolve, 5000)); // Esperar 5 segundos
+    await obtenerEstadoViaje(id_envio);
 
     // Crear incidente a mitad del viaje
     if (i === 2) {
-      log(colors.yellow, '\n⚠️ Provocando incidente de temperatura...');
+      log(colors.yellow, "\n⚠️ Provocando incidente de temperatura...");
       await crearIncidenteTemperatura(id_envio);
     }
 
     // Crear otro incidente
     if (i === 4) {
-      log(colors.yellow, '\n⚠️ Provocando incidente de batería...');
+      log(colors.yellow, "\n⚠️ Provocando incidente de batería...");
       await crearIncidenteBateria(id_envio);
     }
   }
 
   // 8. Obtener incidentes finales
-  log(colors.yellow, '\n🔍 Obteniendo incidentes del backend...');
+  log(colors.yellow, "\n🔍 Obteniendo incidentes del backend...");
   await obtenerIncidentes(id_envio);
 
-  log(colors.green, '\n✅ Prueba completada exitosamente\n');
+  log(colors.green, "\n✅ Prueba completada exitosamente\n");
 }
 
 // Ejecutar
-flujoCompleto().catch(error => {
+flujoCompleto().catch((error) => {
   log(colors.red, `Error fatal: ${error.message}`);
   process.exit(1);
 });

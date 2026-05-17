@@ -1,0 +1,7 @@
+# Evitar copiar secretos y artefactos locales al contenedor
+.env
+node_modules
+npm-debug.log
+Dockerfile
+.git
+.gitignore

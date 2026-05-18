@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useEnvios } from "../hooks/useEnvios.js";
 import { useTelemetry } from "../hooks/useTelemetry.js";
+import truckIconUrl from "../../assets/truck.png";
 
 // ── CSS embebido - Professional SaaS Design ──────────────────────────────────
 const MAP_STYLES = `
@@ -606,6 +607,12 @@ function loadLeaflet() {
 const BASE_LAT = 13.7942;
 const BASE_LNG = -88.8965;
 
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isNaN(num) ? null : num;
+}
+
 function toLatLng(x, y) {
   return {
     lat: BASE_LAT + (y - 100) * 0.004,
@@ -615,16 +622,16 @@ function toLatLng(x, y) {
 
 // ── Tarjeta individual - Professional Design ────────────────────────────────
 function EnvioCard({ envio, isSelected, onSelect }) {
-  const { telemetry } = useTelemetry(envio?.id_vehiculo);
+  const { telemetry } = useTelemetry(envio?.id_envio);
 
-  const temp      = telemetry?.temperatura ?? null;
-  const humedad   = telemetry?.humedad     ?? null;
-  const velocidad = telemetry?.velocidad   ?? null;
-  const lat       = telemetry?.latitud     ?? null;
-  const lng       = telemetry?.longitud    ?? null;
+  const temp      = toNumber(telemetry?.temperatura);
+  const humedad   = toNumber(telemetry?.humedad);
+  const velocidad = toNumber(telemetry?.velocidad);
+  const lat       = toNumber(telemetry?.latitud);
+  const lng       = toNumber(telemetry?.longitud);
 
-  const tempMax    = envio?.temp_max_permitida ?? 15;
-  const tempMin    = envio?.temp_min_permitida ?? -5;
+  const tempMax    = toNumber(envio?.temp_max_permitida) ?? 15;
+  const tempMin    = toNumber(envio?.temp_min_permitida) ?? -5;
   const isCritical = temp !== null && (temp > tempMax || temp < tempMin);
 
   let cardClass = "envio-card";
@@ -695,7 +702,7 @@ function EnvioCard({ envio, isSelected, onSelect }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function MapContainer({ selectedEnvio, onSelectEnvio }) {
+export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = [] }) {
   const mapDivRef = useRef(null);
   const mapRef    = useRef(null);
   const layersRef = useRef([]);
@@ -704,9 +711,10 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio }) {
   const [zoom, setZoom]               = useState(1);
   const [selectedForMap, setSelectedForMap] = useState(null);
   const [mapReady, setMapReady]       = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const vehiculoId = selectedEnvio?.id_vehiculo;
-  const { telemetry } = useTelemetry(vehiculoId);
+  const envioId = selectedEnvio?.id_envio;
+  const { telemetry } = useTelemetry(envioId);
 
   // Inyectar estilos al montar
   useEffect(() => { injectStyles(); }, []);
@@ -842,26 +850,106 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio }) {
           // Aura (equivale al arc con globalAlpha 0.3)
           const aura = L.circleMarker([lat, lng], {
             radius: 16, fillColor: "#3b82f6", fillOpacity: 0.2, color: "#3b82f6", weight: 1,
+            interactive: false
           }).addTo(mapRef.current);
           layersRef.current.push(aura);
         }
       }
+
+      // ── Marcadores específicos de rupturas de temperatura ──
+      if (isSelected && rupturas && rupturas.length > 0) {
+        rupturas.forEach((r) => {
+          const lat = toNumber(r.latitud);
+          const lng = toNumber(r.longitud);
+          if (lat !== null && lng !== null) {
+            const temp = toNumber(r.temperatura)?.toFixed(1);
+            const dateObj = new Date(r.marca_tiempo_dispositivo || r.marca_tiempo_servidor);
+            const time = dateObj.toLocaleTimeString();
+            const dateStr = dateObj.toLocaleDateString();
+            const bateria = r.porcentaje_bateria ?? "N/A";
+            const humedad = r.humedad ?? "N/A";
+            
+            const popupContent = `
+              <div style="font-family: inherit; min-width: 160px;">
+                <h4 style="margin: 0 0 8px 0; color: #dc2626; border-bottom: 1px solid #fecaca; padding-bottom: 4px; font-size: 0.9rem;">
+                  ⚠️ Detalle de Incidente
+                </h4>
+                <div style="font-size: 0.8rem; color: #334155; display: flex; flex-direction: column; gap: 4px;">
+                  <div style="display: flex; justify-content: space-between;">
+                    <strong>Temperatura:</strong> <span style="color: #dc2626; font-weight: bold;">${temp}°C</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <strong>Humedad:</strong> <span>${humedad}%</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <strong>Batería:</strong> <span>${bateria}%</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-top: 4px; border-top: 1px dashed #cbd5e1; padding-top: 4px;">
+                    <strong>Fecha:</strong> <span>${dateStr}</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <strong>Hora:</strong> <span>${time}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+            
+            const marker = L.circleMarker([lat, lng], {
+              radius: 7, fillColor: "#dc2626", fillOpacity: 1, color: "#fff", weight: 2,
+            }).addTo(mapRef.current)
+              .bindTooltip(`Ruptura Temp: ${temp}°C`, { direction: "top" })
+              .bindPopup(popupContent, { maxWidth: 300, className: "incident-popup" });
+            
+            const auraRuptura = L.circleMarker([lat, lng], {
+              radius: 14, fillColor: "#dc2626", fillOpacity: 0.25, color: "transparent", weight: 0,
+              interactive: false
+            }).addTo(mapRef.current);
+            
+            layersRef.current.push(marker, auraRuptura);
+          }
+        });
+      }
     });
-  }, [mapReady, envios, selectedForMap, telemetry, generateRoute, onSelectEnvio]);
+  }, [mapReady, envios, selectedForMap, telemetry, generateRoute, onSelectEnvio, rupturas]);
 
   // ── Si llega telemetría real con lat/lng, mover cámara ───────────────────
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !telemetry?.latitud || !telemetry?.longitud) return;
-    mapRef.current.panTo([telemetry.latitud, telemetry.longitud]);
+    const lat = toNumber(telemetry?.latitud);
+    const lng = toNumber(telemetry?.longitud);
+    if (!mapReady || !mapRef.current || lat === null || lng === null) return;
+    mapRef.current.panTo([lat, lng]);
   }, [mapReady, telemetry]);
+
+  // Filtramos los envios por el término de búsqueda
+  const filteredEnvios = envios.filter((envio) => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      String(envio.id_envio || "").includes(searchLower) ||
+      (envio.codigo_rastreo && envio.codigo_rastreo.toLowerCase().includes(searchLower)) ||
+      (envio.tipo_mercancia && envio.tipo_mercancia.toLowerCase().includes(searchLower)) ||
+      (envio.origen && envio.origen.toLowerCase().includes(searchLower)) ||
+      (envio.destino && envio.destino.toLowerCase().includes(searchLower))
+    );
+  });
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="map-container">
 
-      {/* Cabecera con controles originales */}
+      {/* Cabecera con controles originales y el buscador */}
       <div className="map-header">
-        <h2>Mapa Logístico</h2>
+        <h2 style={{ whiteSpace: "nowrap" }}>Mapa Logístico</h2>
+        
+        <div style={{ flex: 1, margin: "0 16px", maxWidth: "400px" }}>
+          <input
+            type="text"
+            placeholder="Buscar por ID, código, origen..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ width: "100%", padding: "7px 14px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", outline: "none" }}
+          />
+        </div>
+
         <div className="map-controls">
           <button className="zoom-btn" onClick={() => handleZoom("in")} title="Zoom in">+</button>
           <span className="zoom-level">{(zoom * 100).toFixed(0)}%</span>
@@ -886,7 +974,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio }) {
 
       {/* Tarjetas de envíos */}
       <div className="envio-cards-row">
-        {envios.map((envio) => (
+        {filteredEnvios.map((envio) => (
           <EnvioCard
             key={envio.id_envio}
             envio={envio}
@@ -894,6 +982,11 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio }) {
             onSelect={(e) => { setSelectedForMap(e); onSelectEnvio(e); }}
           />
         ))}
+        {filteredEnvios.length === 0 && (
+          <div style={{ padding: "10px 20px", color: "#64748b", fontSize: "0.9rem", fontStyle: "italic" }}>
+            No se encontraron envíos para tu búsqueda.
+          </div>
+        )}
       </div>
 
       {/* Info detalle seleccionado (lógica original) */}
@@ -909,13 +1002,13 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio }) {
           {telemetry && (
             <>
               <div className="info-item">
-                <strong>Temperatura:</strong> {telemetry.temperatura?.toFixed(1)}°C
+                <strong>Temperatura:</strong> {toNumber(telemetry.temperatura)?.toFixed(1)}°C
               </div>
               <div className="info-item">
-                <strong>Humedad:</strong> {telemetry.humedad?.toFixed(1)}%
+                <strong>Humedad:</strong> {toNumber(telemetry.humedad)?.toFixed(1)}%
               </div>
               <div className="info-item">
-                <strong>Velocidad:</strong> {telemetry.velocidad?.toFixed(1)} km/h
+                <strong>Velocidad:</strong> {toNumber(telemetry.velocidad)?.toFixed(1)} km/h
               </div>
             </>
           )}

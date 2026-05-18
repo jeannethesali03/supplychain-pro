@@ -4,22 +4,56 @@
  * Professional SaaS Design
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import "../styles/dashboard.css";
+import "../styles/telemetry.css";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import MapContainer from "./MapContainer";
-import IncidentsPanel from "./IncidentsPanel";
+import IncidentesView from "./IncidentesView";
+import MonitoreoView from "./MonitoreoView";
+import HistorialView from "./HistorialView";
+import ConfiguracionView from "./ConfiguracionView";
 import Footer from "./Footer";
+import TelemetryPanel from "./TelemetryPanel";
+import apiService from "../services/apiService";
 
 export default function DashboardLayout({ user, onLogout }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState("dashboard");
   const [selectedEnvio, setSelectedEnvio] = useState(null);
+  const [rupturas, setRupturas] = useState([]);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
   }, []);
+
+  useEffect(() => {
+    async function fetchRupturas() {
+      if (!selectedEnvio) {
+        setRupturas([]);
+        return;
+      }
+      try {
+        const res = await apiService.getTelemetriaByEnvio(selectedEnvio.id_envio);
+        if (res.success && res.data) {
+          const tempMax = Number(selectedEnvio.temp_max_permitida) ?? 15;
+          const tempMin = Number(selectedEnvio.temp_min_permitida) ?? -5;
+          const breaches = res.data.filter((t) => {
+            const temp = Number(t.temperatura);
+            return !Number.isNaN(temp) && (temp > tempMax || temp < tempMin);
+          });
+          setRupturas(breaches);
+        } else {
+          setRupturas([]);
+        }
+      } catch (err) {
+        console.error("Error al obtener rupturas:", err);
+        setRupturas([]);
+      }
+    }
+    fetchRupturas();
+  }, [selectedEnvio]);
 
   const renderMainContent = () => {
     switch (activeView) {
@@ -29,50 +63,37 @@ export default function DashboardLayout({ user, onLogout }) {
             <MapContainer
               selectedEnvio={selectedEnvio}
               onSelectEnvio={setSelectedEnvio}
+              rupturas={rupturas}
             />
+            <TelemetryPanel selectedEnvio={selectedEnvio} rupturas={rupturas} />
           </div>
         );
 
       case "monitoreo":
         return (
           <div className="dashboard-main">
-            <div className="monitoreo-container">
-              <h2>Monitoreo en Tiempo Real</h2>
-              <p style={{ color: "var(--color-text-tertiary)", marginTop: "var(--spacing-lg)" }}>
-                Vista de monitoreo - En construcción
-              </p>
-            </div>
+            <MonitoreoView />
           </div>
         );
 
       case "incidentes":
         return (
           <div className="dashboard-main">
-            <IncidentsPanel />
+            <IncidentesView />
           </div>
         );
 
       case "historial":
         return (
           <div className="dashboard-main">
-            <div className="historial-container">
-              <h2>Historial de Envíos</h2>
-              <p style={{ color: "var(--color-text-tertiary)", marginTop: "var(--spacing-lg)" }}>
-                Vista de historial - En construcción
-              </p>
-            </div>
+            <HistorialView />
           </div>
         );
 
       case "configuracion":
         return (
           <div className="dashboard-main">
-            <div className="config-container">
-              <h2>Configuración</h2>
-              <p style={{ color: "var(--color-text-tertiary)", marginTop: "var(--spacing-lg)" }}>
-                Panel de configuración - En construcción
-              </p>
-            </div>
+            <ConfiguracionView />
           </div>
         );
 

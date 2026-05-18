@@ -7,7 +7,7 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_BASE=http://localhost:5001/api
+ARG VITE_API_BASE=http://supplychainpro-backend:5000/api
 ENV VITE_API_BASE=${VITE_API_BASE}
 
 RUN npm run build

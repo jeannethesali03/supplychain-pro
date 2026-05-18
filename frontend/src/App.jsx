@@ -1,9 +1,9 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { Link } from "react-router-dom";
 import "./App.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5001/api";
 const SOCKET_URL = API_BASE.replace(/\/api\/?$/, "");
 const STREAM_LIMIT = 50;
 const STORAGE_POLL_MS = 5000;
@@ -586,26 +586,27 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="brand">
-          <span className="brand-kicker">SIMULADOR IOT</span>
-          <strong>Control de Camiones</strong>
-        </div>
-        {token && user ? (
-          <div className="header-actions">
-            <span className="user-chip">
-              {user.nombre_completo} · {user.rol}
-            </span>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={handleLogout}
-            >
-              Cerrar sesion
-            </button>
-          </div>
-        ) : null}
-      </header>
+    <header className="app-header">
+  <div className="brand">
+    <span className="brand-kicker">SIMULADOR IOT</span>
+    <strong>Control de Camiones</strong>
+  </div>
+
+  {/* NAV entre paneles */}
+  <nav className="app-nav">
+    <Link to="/" className="app-nav-link active">⚙ Simulador</Link>
+    <Link to="/dashboard" className="app-nav-link">🗺 Dashboard</Link>
+  </nav>
+
+  {token && user ? (
+    <div className="header-actions">
+      <span className="user-chip">{user.nombre_completo} · {user.rol}</span>
+      <button className="ghost-button" type="button" onClick={handleLogout}>
+        Cerrar sesion
+      </button>
+    </div>
+  ) : null}
+</header>
 
       <main className="app-main">
         {error ? <div className="alert error">{error}</div> : null}

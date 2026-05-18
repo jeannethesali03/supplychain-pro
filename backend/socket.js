@@ -5,8 +5,9 @@ let io = null;
 function initSocket(httpServer, allowedOrigins) {
   io = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins,
+      origin: process.env.NODE_ENV !== "production" ? true : allowedOrigins,
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 

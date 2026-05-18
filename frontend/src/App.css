@@ -575,3 +575,33 @@
     flex-direction: column;
   }
 }
+
+/* ── Navegación entre paneles ── */
+.app-nav {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.25rem;
+  border-radius: 8px;
+}
+
+.app-nav-link {
+  padding: 0.35rem 1rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.app-nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.app-nav-link.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}

@@ -3,6 +3,7 @@ const http = require("http");
 const express = require("express"); //Crear servidor web
 const cors = require("cors"); //Para permitir solicitudes desde otro dominio
 const swaggerUi = require("swagger-ui-express");
+const bcrypt = require("bcrypt");
 
 const db = require("./config/db");
 const swaggerSpec = require("./config/swagger");
@@ -23,7 +24,7 @@ const { initSocket } = require("./socket");
 const app = express(); //Instancia del servidor
 const allowedOrigins = (
   process.env.CORS_ORIGINS ||
-  "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5001,http://localhost:3000"
+  "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5001,http://localhost:3000"
 ).split(",");
 
 app.use(
@@ -31,14 +32,24 @@ app.use(
     origin: function (origin, callback) {
       // Permitir solicitudes sin origin (como curl o Postman)
       if (!origin) return callback(null, true);
+      
+      // En desarrollo, permitir cualquier origen para facilitar testing
+      if (process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      
+      // En producción, usar lista blanca
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       } else {
         return callback(new Error("No permitido por CORS"));
       }
     },
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
+    preflightContinue: false, // Responder a preflight requests
+    optionsSuccessStatus: 204, // Código de éxito para OPTIONS
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 app.use(express.json()); //Recibir los datos en JSON
@@ -72,6 +83,7 @@ app.use("/api/envios", enviosRoutes);
 app.use("/api/vehiculos", vehiculosRoutes);
 app.use("/api/envios-vehiculos", enviosVehiculosRoutes);
 app.use("/api/registros", registrosRoutes);
+app.use("/api/registrosTelemetria", registrosRoutes);
 app.use("/api/incidentes", incidentesRoutes);
 app.use("/api/productos", productosRoutes);
 app.use("/api/detalles-envio", detallesEnvioRoutes);
@@ -88,6 +100,47 @@ const verifyDbConnection = async () => {
     console.error("Error conectando a la base de datos:", err);
     process.exit(1); // Sale de la aplicacion en caso de error
   }
+};
+
+const ensureAdminUser = async () => {
+  const correo = process.env.ADMIN_EMAIL;
+  const contrasena = process.env.ADMIN_PASSWORD;
+  const nombreCompleto = process.env.ADMIN_NAME || "Administrador";
+
+  if (!correo || !contrasena) {
+    console.warn("ADMIN_EMAIL/ADMIN_PASSWORD no configurados; se omite seed de admin.");
+    return;
+  }
+
+  await db.query(
+    "INSERT IGNORE INTO roles (id_rol, nombre, descripcion) VALUES (1, 'ADMIN', 'Administrador (CRUD completo)'), (2, 'USUARIO', 'Usuario de solo lectura')"
+  );
+
+  const [existing] = await db.query(
+    "SELECT id_usuario, contrasena_hash FROM usuarios WHERE correo = ? LIMIT 1",
+    [correo]
+  );
+
+  const hash = await bcrypt.hash(contrasena, 10);
+
+  if (existing.length) {
+    const currentHash = existing[0].contrasena_hash;
+    const matches = currentHash ? await bcrypt.compare(contrasena, currentHash) : false;
+    if (!matches) {
+      await db.query(
+        "UPDATE usuarios SET contrasena_hash = ?, activo = true WHERE id_usuario = ?",
+        [hash, existing[0].id_usuario]
+      );
+      console.log(`Admin actualizado: ${correo}`);
+    }
+    return;
+  }
+
+  await db.query(
+    "INSERT INTO usuarios (id_rol, nombre_completo, correo, contrasena_hash, activo) VALUES (?, ?, ?, ?, true)",
+    [1, nombreCompleto, correo, hash]
+  );
+  console.log(`Admin creado: ${correo}`);
 };
 
 /**
@@ -150,11 +203,12 @@ app.get("/health/db", async (req, res) => {
 
 // Iniciar servidor
 const PORT = process.env.PORT || 5000;
-const server = http.createServer(app);
-initSocket(server, allowedOrigins);
+const httpServer = http.createServer(app);
+initSocket(httpServer, allowedOrigins);
 
-server.listen(PORT, async () => {
-  console.log(`Servidor backend corriendo en el puerto ${PORT}`);
+httpServer.listen(PORT, async () => {
+  console.log(`Servidor escuchando en el puerto ${PORT}`);
   console.log(`Swagger UI disponible en /api-docs`);
   await verifyDbConnection();
+  await ensureAdminUser();
 });

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import apiService from "../services/apiService.js";
 import { useTelemetry } from "../hooks/useTelemetry.js";
+import { useEnvios } from "../hooks/useEnvios.js";
 
 function TelemetryStatus({ envioId, tempMax, tempMin }) {
   const { telemetry } = useTelemetry(envioId);
@@ -48,7 +49,7 @@ function TelemetryStatus({ envioId, tempMax, tempMin }) {
 }
 
 export default function MonitoreoView() {
-  const [envios, setEnvios] = useState([]);
+  const { envios, loading: enviosLoading, error: enviosError } = useEnvios();
   const [vehiculos, setVehiculos] = useState([]);
   const [asignaciones, setAsignaciones] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,19 +63,16 @@ export default function MonitoreoView() {
       setLoading(true);
       setError("");
 
-      const [enviosRes, vehiculosRes, asignacionesRes] = await Promise.all([
-        apiService.getEnvios(),
+      const [vehiculosRes, asignacionesRes] = await Promise.all([
         apiService.getVehiculos(),
         apiService.getEnviosVehiculos(),
       ]);
 
       if (!isMounted) return;
 
-      if (!enviosRes.success) return setError(enviosRes.error || "Error cargando envíos");
       if (!vehiculosRes.success) return setError(vehiculosRes.error || "Error cargando vehículos");
       if (!asignacionesRes.success) return setError(asignacionesRes.error || "Error cargando asignaciones");
 
-      setEnvios(enviosRes.data || []);
       setVehiculos(vehiculosRes.data || []);
       setAsignaciones(asignacionesRes.data || []);
       setLoading(false);
@@ -128,13 +126,13 @@ export default function MonitoreoView() {
         </div>
       </div>
 
-      {error && (
+      {(error || enviosError) && (
         <div className="alert error">
-          <p>{error}</p>
+          <p>{error || enviosError}</p>
         </div>
       )}
 
-      {loading ? (
+      {(loading || enviosLoading) ? (
         <div className="panel-card" style={{ textAlign: "center", padding: "40px" }}><span className="muted">Cargando monitoreo...</span></div>
       ) : filtered.length === 0 ? (
         <div className="panel-card" style={{ textAlign: "center", padding: "40px" }}>

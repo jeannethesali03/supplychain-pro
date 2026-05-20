@@ -4,44 +4,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import apiService from "../services/apiService.js";
+import { useEnvios } from "../hooks/useEnvios.js";
 
 export default function HistorialView() {
-  const [envios, setEnvios] = useState([]);
+  const { envios, loading: enviosLoading, error: enviosError } = useEnvios();
   const [selectedEnvio, setSelectedEnvio] = useState(null);
   const [detalles, setDetalles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const load = async () => {
-      setLoading(true);
-      setError("");
-
-      const res = await apiService.getEnvios();
-      if (!isMounted) return;
-
-      if (res.success) {
-        setEnvios(res.data || []);
-      } else {
-        setError(res.error || "Error cargando envíos");
-      }
-      setLoading(false);
-    };
-
-    load();
-    return () => { isMounted = false; };
-  }, []);
+  const currentSelectedEnvio = selectedEnvio
+    ? envios.find((e) => String(e.id_envio) === String(selectedEnvio.id_envio)) || selectedEnvio
+    : null;
 
   useEffect(() => {
     let isMounted = true;
 
     const loadDetalles = async () => {
-      if (!selectedEnvio) return setDetalles([]);
-      const res = await apiService.getDetallesEnvio(selectedEnvio.id_envio);
+      if (!currentSelectedEnvio) return setDetalles([]);
+      const res = await apiService.getDetallesEnvio(currentSelectedEnvio.id_envio);
       if (!isMounted) return;
       if (res.success) setDetalles(res.data || []);
       else setDetalles([]);
@@ -49,7 +30,7 @@ export default function HistorialView() {
 
     loadDetalles();
     return () => { isMounted = false; };
-  }, [selectedEnvio]);
+  }, [currentSelectedEnvio]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -91,13 +72,13 @@ export default function HistorialView() {
         </div>
       </div>
 
-      {error && (
+      {enviosError && (
         <div className="alert error">
-          <p>{error}</p>
+          <p>{enviosError}</p>
         </div>
       )}
 
-      {loading ? (
+      {enviosLoading ? (
         <div className="panel-card" style={{ textAlign: "center", padding: "40px" }}><span className="muted">Cargando historial...</span></div>
       ) : (
         <div className="simulation-layout" style={{ gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
@@ -110,7 +91,7 @@ export default function HistorialView() {
             </div>
             <div style={{ overflowY: "auto", flex: 1 }}>
               {filtered.map((envio) => {
-                const isActive = selectedEnvio?.id_envio === envio.id_envio;
+                const isActive = currentSelectedEnvio?.id_envio === envio.id_envio;
                 let statusClass = "status-pill reachable";
                 if (envio.estado === "INCIDENTE_REPORTADO" || envio.estado === "CANCELADO") statusClass = "status-pill blocked";
                 if (envio.estado === "EN_TRANSITO") statusClass = "status-pill";
@@ -149,26 +130,26 @@ export default function HistorialView() {
           </div>
 
           <div className="panel-card">
-            {selectedEnvio ? (
+            {currentSelectedEnvio ? (
               <>
                 <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: "16px", marginBottom: "16px" }}>
-                  <div className="card-title" style={{ fontSize: "1.3rem", marginBottom: "4px" }}>{selectedEnvio.codigo_rastreo}</div>
-                  <div className="muted">{selectedEnvio.origen} → {selectedEnvio.destino}</div>
+                  <div className="card-title" style={{ fontSize: "1.3rem", marginBottom: "4px" }}>{currentSelectedEnvio.codigo_rastreo}</div>
+                  <div className="muted">{currentSelectedEnvio.origen} → {currentSelectedEnvio.destino}</div>
                 </div>
 
                 <div className="meta-grid" style={{ marginBottom: "20px" }}>
                   <div>
                     <span>Estado</span>
-                    <strong>{selectedEnvio.estado || "EN_TRANSITO"}</strong>
+                    <strong>{currentSelectedEnvio.estado || "EN_TRANSITO"}</strong>
                   </div>
                   <div>
                     <span>Rango temp</span>
-                    <strong>{selectedEnvio.temp_min_permitida}°C / {selectedEnvio.temp_max_permitida}°C</strong>
+                    <strong>{currentSelectedEnvio.temp_min_permitida}°C / {currentSelectedEnvio.temp_max_permitida}°C</strong>
                   </div>
                   <div style={{ gridColumn: "1 / -1" }}>
                     <span>Creado</span>
                     <strong>
-                      {selectedEnvio.fecha_creacion ? new Date(selectedEnvio.fecha_creacion).toLocaleString("es-ES") : "—"}
+                      {currentSelectedEnvio.fecha_creacion ? new Date(currentSelectedEnvio.fecha_creacion).toLocaleString("es-ES") : "—"}
                     </strong>
                   </div>
                 </div>

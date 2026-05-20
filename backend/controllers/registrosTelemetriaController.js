@@ -35,6 +35,84 @@ exports.createRegistro = async (req, res, next) => {
       marca_tiempo_dispositivo,
       server_timestamp: new Date().toISOString(),
     });
+
+    // Validación automática del backend para generar Tickets de Incidencia Inmutables
+    try {
+      const [envioRows] = await db.query(
+        'SELECT temp_min_permitida, temp_max_permitida, estado FROM envios WHERE id_envio = ?',
+        [id_envio]
+      );
+      if (envioRows.length > 0) {
+        const envio = envioRows[0];
+        const tMin = Number(envio.temp_min_permitida);
+        const tMax = Number(envio.temp_max_permitida);
+        const tempVal = Number(temperatura);
+
+        // Caso 1: Ruptura de cadena de frío
+        if (tempVal < tMin || tempVal > tMax) {
+          const [existingIncident] = await db.query(
+            'SELECT id_incidente FROM incidentes WHERE id_envio = ? AND tipo_incidente = ? AND ABS(valor_registrado - ?) < 0.01',
+            [id_envio, 'RUPTURA_CADENA_FRIO', tempVal]
+          );
+          if (existingIncident.length === 0) {
+            const [incResult] = await db.query(
+              'INSERT INTO incidentes (id_envio, id_registro_telemetria, tipo_incidente, valor_registrado, valor_limite, descripcion, origen_evento) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [id_envio, result.insertId, 'RUPTURA_CADENA_FRIO', tempVal, tempVal > tMax ? tMax : tMin, 'Temperatura excedió los límites permitidos (Generado por el Backend)', 'SISTEMA']
+            );
+            if (envio.estado !== 'INCIDENTE_REPORTADO') {
+              await db.query('UPDATE envios SET estado = ? WHERE id_envio = ?', ['INCIDENTE_REPORTADO', id_envio]);
+              emitEvent('envio:updated', { id_envio, estado: 'INCIDENTE_REPORTADO' });
+            }
+            emitEvent('incident:new', {
+              id_incidente: incResult.insertId,
+              id_envio,
+              id_registro_telemetria: result.insertId,
+              tipo_incidente: 'RUPTURA_CADENA_FRIO',
+              valor_registrado: tempVal,
+              valor_limite: tempVal > tMax ? tMax : tMin,
+              descripcion: 'Temperatura excedió los límites permitidos (Generado por el Backend)',
+              origen_evento: 'SISTEMA',
+              server_timestamp: new Date().toISOString()
+            });
+          }
+        }
+
+        // Caso 2: Batería crítica
+        if (porcentaje_bateria !== undefined && porcentaje_bateria !== null) {
+          const batVal = Number(porcentaje_bateria);
+          if (batVal <= 5) {
+            const [existingBatIncident] = await db.query(
+              'SELECT id_incidente FROM incidentes WHERE id_envio = ? AND tipo_incidente = ? AND valor_registrado = ?',
+              [id_envio, 'BATERIA_BAJA', batVal]
+            );
+            if (existingBatIncident.length === 0) {
+              const [incResult] = await db.query(
+                'INSERT INTO incidentes (id_envio, id_registro_telemetria, tipo_incidente, valor_registrado, valor_limite, descripcion, origen_evento) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [id_envio, result.insertId, 'BATERIA_BAJA', batVal, 10, 'Batería baja en dispositivo de monitoreo (Generado por el Backend)', 'SISTEMA']
+              );
+              if (envio.estado !== 'INCIDENTE_REPORTADO') {
+                await db.query('UPDATE envios SET estado = ? WHERE id_envio = ?', ['INCIDENTE_REPORTADO', id_envio]);
+                emitEvent('envio:updated', { id_envio, estado: 'INCIDENTE_REPORTADO' });
+              }
+              emitEvent('incident:new', {
+                id_incidente: incResult.insertId,
+                id_envio,
+                id_registro_telemetria: result.insertId,
+                tipo_incidente: 'BATERIA_BAJA',
+                valor_registrado: batVal,
+                valor_limite: 10,
+                descripcion: 'Batería baja en dispositivo de monitoreo (Generado por el Backend)',
+                origen_evento: 'SISTEMA',
+                server_timestamp: new Date().toISOString()
+              });
+            }
+          }
+        }
+      }
+    } catch (errCheck) {
+      console.error('Error al realizar validaciones de incidentes automáticas en el backend:', errCheck);
+    }
+
     res.status(201).json({ id_registro_telemetria: result.insertId });
   } catch (err) { next(err); }
 };

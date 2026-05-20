@@ -71,9 +71,12 @@ export function useIncidents(vehiculoId = null) {
     // Restaurar incidentes guardados
     const saved = storageService.getIncidents();
     if (saved && saved.length > 0) {
-      setIncidents(saved);
+      const filtered = vehiculoId
+        ? saved.filter((item) => String(item.id_envio) === String(vehiculoId))
+        : saved;
+      setIncidents(filtered);
     }
-  }, [loadIncidents]);
+  }, [loadIncidents, vehiculoId]);
 
   // Suscribirse a nuevos incidentes
   useEffect(() => {

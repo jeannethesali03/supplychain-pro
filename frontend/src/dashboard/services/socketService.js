@@ -74,6 +74,14 @@ class SocketManager {
     return this._subscribe("incident:new", callback);
   }
 
+  onEnvioUpdated(callback) {
+    return this._subscribe("envio:updated", callback);
+  }
+
+  onEnvioCreated(callback) {
+    return this._subscribe("envio:created", callback);
+  }
+
   onSimulatorPosition(callback) {
     return this._subscribe("simulator:posicion", callback);
   }

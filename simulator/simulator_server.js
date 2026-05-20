@@ -45,6 +45,25 @@ async function getAdminToken() {
 }
 
 /**
+ * Actualiza el estado de un envío en la base de datos
+ */
+async function actualizarEstadoEnvio(id_envio, estado) {
+  try {
+    if (!adminToken) {
+      await getAdminToken();
+    }
+    await axios.put(
+      `${BACKEND_URL}/api/envios/${id_envio}`,
+      { estado },
+      { headers: { Authorization: `Bearer ${adminToken}` } }
+    );
+    console.log(`✓ Estado del envío ${id_envio} actualizado a ${estado} en la DB`);
+  } catch (error) {
+    console.error(`✗ Error actualizando estado del envío ${id_envio} a ${estado}:`, error.message);
+  }
+}
+
+/**
  * Calcula la distancia entre dos puntos (haversine)
  */
 function calcularDistancia(lat1, lon1, lat2, lon2) {
@@ -54,9 +73,9 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distancia = R * c;
   return distancia * 1000; // Convertir a metros
@@ -164,6 +183,9 @@ async function iniciarViaje(id_envio, id_ruta, tempMin, tempMax, waypoints) {
 
   activeJourneys.set(id_envio, journeyState);
 
+  // Actualizar estado del envío en la base de datos
+  await actualizarEstadoEnvio(id_envio, "EN_TRANSITO");
+
   // Iniciar telemetría periódica
   iniciarTelemetria(id_envio);
 }
@@ -184,7 +206,7 @@ function iniciarTelemetria(id_envio) {
 
     // Si el viaje termina
     if (progreso >= 1) {
-      finalizarViaje(id_envio);
+      await finalizarViaje(id_envio);
       return;
     }
 
@@ -261,7 +283,7 @@ async function enviarTelemetria(id_envio, posicion, telemetria, timestamp) {
 /**
  * Finaliza un viaje
  */
-function finalizarViaje(id_envio) {
+async function finalizarViaje(id_envio) {
   const journey = activeJourneys.get(id_envio);
   if (!journey) return;
 
@@ -271,6 +293,7 @@ function finalizarViaje(id_envio) {
 
   journey.estado = "FINALIZADO";
   console.log(`\n✓ Viaje finalizado para envío ${id_envio}`);
+  await actualizarEstadoEnvio(id_envio, "ENTREGADO");
 }
 
 // ============================================
@@ -379,7 +402,7 @@ app.post("/api/simulator/journeys/:id_envio/resume", (req, res) => {
  * POST /api/simulator/journeys/:id_envio/stop
  * Detiene un viaje
  */
-app.post("/api/simulator/journeys/:id_envio/stop", (req, res) => {
+app.post("/api/simulator/journeys/:id_envio/stop", async (req, res) => {
   const { id_envio } = req.params;
   const journey = activeJourneys.get(Number(id_envio));
 
@@ -387,7 +410,7 @@ app.post("/api/simulator/journeys/:id_envio/stop", (req, res) => {
     return res.status(404).json({ error: "Viaje no encontrado" });
   }
 
-  finalizarViaje(Number(id_envio));
+  await finalizarViaje(Number(id_envio));
   activeJourneys.delete(Number(id_envio));
 
   res.json({ success: true, mensaje: "Viaje detenido" });
@@ -478,6 +501,8 @@ app.post(
         headers: { Authorization: `Bearer ${adminToken}` },
       });
 
+      await actualizarEstadoEnvio(Number(id_envio), "INCIDENTE_REPORTADO");
+
       journey.incidentes.push({
         tipo: "RUPTURA_CADENA_FRIO",
         timestamp: new Date().toISOString(),
@@ -534,6 +559,8 @@ app.post(
         headers: { Authorization: `Bearer ${adminToken}` },
       });
 
+      await actualizarEstadoEnvio(Number(id_envio), "INCIDENTE_REPORTADO");
+
       journey.incidentes.push({
         tipo: "BATERIA_BAJA",
         timestamp: new Date().toISOString(),
@@ -582,6 +609,8 @@ app.post(
       await axios.post(`${BACKEND_URL}/api/incidentes`, payload, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
+
+      await actualizarEstadoEnvio(Number(id_envio), "INCIDENTE_REPORTADO");
 
       journey.incidentes.push({
         tipo: "VIOLACION_GEOFENCE",
@@ -633,6 +662,8 @@ app.post(
       await axios.post(`${BACKEND_URL}/api/incidentes`, payload, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
+
+      await actualizarEstadoEnvio(Number(id_envio), "INCIDENTE_REPORTADO");
 
       journey.incidentes.push({
         tipo: "VOLUMEN_LLENO",

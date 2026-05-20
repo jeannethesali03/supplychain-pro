@@ -4,9 +4,10 @@
  * CSS embebido directamente en el componente
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useEnvios } from "../hooks/useEnvios.js";
 import { useTelemetry } from "../hooks/useTelemetry.js";
+import apiService from "../services/apiService.js";
 
 // ── CSS embebido - Professional SaaS Design ──────────────────────────────────
 const MAP_STYLES = `
@@ -694,23 +695,29 @@ function EnvioCard({ envio, isSelected, onSelect }) {
       {/* Footer con información adicional */}
       <div className="envio-card__footer">
         {velocidad !== null && `${velocidad.toFixed(0)} km/h`}
-        {velocidad !== null && " · "}En tránsito
+        {velocidad !== null && " · "}
+        {envio?.estado === "ENTREGADO"
+          ? "Entregado"
+          : envio?.estado === "CANCELADO"
+            ? "Cancelado"
+            : envio?.estado === "INCIDENTE_REPORTADO"
+              ? "Incidente"
+              : "En tránsito"}
       </div>
     </div>
   );
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = [] }) {
+export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = [], envios = [] }) {
   const mapDivRef = useRef(null);
   const mapRef    = useRef(null);
   const layersRef = useRef([]);
-
-  const { envios } = useEnvios();
   const [zoom, setZoom]               = useState(1);
-  const [selectedForMap, setSelectedForMap] = useState(null);
+  const selectedForMap = selectedEnvio;
   const [mapReady, setMapReady]       = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [rutas, setRutas]             = useState([]);
 
   const envioId = selectedEnvio?.id_envio;
   const { telemetry } = useTelemetry(envioId);
@@ -718,9 +725,57 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
   // Inyectar estilos al montar
   useEffect(() => { injectStyles(); }, []);
 
-  // ── generateRoute: EXACTAMENTE igual al original ──────────────────────────
+  // Cargar catálogo de rutas para usar coordenadas reales
+  useEffect(() => {
+    async function loadRutas() {
+      try {
+        const res = await apiService.getRutas();
+        if (res.success && Array.isArray(res.data)) {
+          setRutas(res.data);
+        }
+      } catch (err) {
+        console.error("Error loading routes in MapContainer:", err);
+      }
+    }
+    loadRutas();
+  }, []);
+
+  // ── generateRoute: usa rutas reales de la DB si están disponibles ───────────
   const generateRoute = useCallback((envio) => {
     if (!envio) return [];
+
+    if (envio.id_ruta && rutas.length > 0) {
+      const rutaEncontrada = rutas.find((r) => r.id_ruta === envio.id_ruta);
+      if (rutaEncontrada) {
+        try {
+          const waypoints = typeof rutaEncontrada.waypoints_json === "string"
+            ? JSON.parse(rutaEncontrada.waypoints_json)
+            : rutaEncontrada.waypoints_json;
+
+          if (Array.isArray(waypoints) && waypoints.length > 0) {
+            return waypoints.map((wp, idx) => {
+              let type = "checkpoint";
+              let label = `Checkpoint ${idx}`;
+              if (idx === 0) {
+                type = "inicio";
+                label = "Origen";
+              } else if (idx === waypoints.length - 1) {
+                type = "fin";
+                label = "Destino";
+              }
+              return {
+                lat: wp.lat,
+                lng: wp.lng,
+                type,
+                label,
+              };
+            });
+          }
+        } catch (e) {
+          console.error("Error al parsear waypoints_json:", e);
+        }
+      }
+    }
 
     const startX = 50 + (envio.id_envio % 10) * 10;
     const startY = 50 + Math.floor(envio.id_envio / 10) * 10;
@@ -746,7 +801,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
     });
 
     return route;
-  }, []);
+  }, [rutas]);
 
   // ── handleZoom: igual al original ────────────────────────────────────────
   const handleZoom = useCallback((direction) => {
@@ -802,6 +857,9 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
       const lineOpacity = isSelected ? 1 : 0.5;
 
       const latLngs = route.map((p) => {
+        if (p.lat !== undefined && p.lng !== undefined) {
+          return [p.lat, p.lng];
+        }
         const { lat, lng } = toLatLng(p.x, p.y);
         return [lat, lng];
       });
@@ -813,7 +871,8 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
 
       // Puntos: mismos colores que el canvas original
       route.forEach((point) => {
-        const { lat, lng } = toLatLng(point.x, point.y);
+        const lat = point.lat !== undefined ? point.lat : toLatLng(point.x, point.y).lat;
+        const lng = point.lng !== undefined ? point.lng : toLatLng(point.x, point.y).lng;
         let color, radius;
         if (point.type === "inicio")      { color = "#10b981"; radius = 8; }
         else if (point.type === "fin")    { color = "#ef4444"; radius = 8; }
@@ -833,25 +892,43 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
         layersRef.current.push(circle);
       });
 
-      // Posición actual (camión) al 70% — igual que el canvas original
+      // Posición actual (camión) - usa telemetría real si existe
       if (isSelected && telemetry) {
-        const posIndex = Math.floor((route.length - 1) * 0.7);
-        if (posIndex < route.length) {
-          const pos = route[posIndex];
-          const { lat, lng } = toLatLng(pos.x, pos.y);
+        const telemetryLat = toNumber(telemetry.latitud);
+        const telemetryLng = toNumber(telemetry.longitud);
 
+        if (telemetryLat !== null && telemetryLng !== null) {
           // Punto azul (equivale al arc azul del canvas)
-          const truck = L.circleMarker([lat, lng], {
+          const truck = L.circleMarker([telemetryLat, telemetryLng], {
             radius: 10, fillColor: "#3b82f6", fillOpacity: 1, color: "#fff", weight: 2,
           }).addTo(mapRef.current).bindTooltip("Posición actual", { direction: "top" });
           layersRef.current.push(truck);
 
           // Aura (equivale al arc con globalAlpha 0.3)
-          const aura = L.circleMarker([lat, lng], {
+          const aura = L.circleMarker([telemetryLat, telemetryLng], {
             radius: 16, fillColor: "#3b82f6", fillOpacity: 0.2, color: "#3b82f6", weight: 1,
             interactive: false
           }).addTo(mapRef.current);
           layersRef.current.push(aura);
+        } else {
+          // Fallback a posicionamiento por porcentaje estático (70%) de la ruta
+          const posIndex = Math.floor((route.length - 1) * 0.7);
+          if (posIndex < route.length) {
+            const pos = route[posIndex];
+            const fallbackLat = pos.lat !== undefined ? pos.lat : toLatLng(pos.x, pos.y).lat;
+            const fallbackLng = pos.lng !== undefined ? pos.lng : toLatLng(pos.x, pos.y).lng;
+
+            const truck = L.circleMarker([fallbackLat, fallbackLng], {
+              radius: 10, fillColor: "#3b82f6", fillOpacity: 1, color: "#fff", weight: 2,
+            }).addTo(mapRef.current).bindTooltip("Posición actual", { direction: "top" });
+            layersRef.current.push(truck);
+
+            const aura = L.circleMarker([fallbackLat, fallbackLng], {
+              radius: 16, fillColor: "#3b82f6", fillOpacity: 0.2, color: "#3b82f6", weight: 1,
+              interactive: false
+            }).addTo(mapRef.current);
+            layersRef.current.push(aura);
+          }
         }
       }
 
@@ -956,7 +1033,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
           {selectedForMap && (
             <button
               className="clear-btn"
-              onClick={() => { setSelectedForMap(null); onSelectEnvio(null); }}
+              onClick={() => { onSelectEnvio(null); }}
               title="Limpiar selección"
             >
               ✕
@@ -978,7 +1055,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
             key={envio.id_envio}
             envio={envio}
             isSelected={selectedForMap?.id_envio === envio.id_envio}
-            onSelect={(e) => { setSelectedForMap(e); onSelectEnvio(e); }}
+            onSelect={onSelectEnvio}
           />
         ))}
         {filteredEnvios.length === 0 && (
@@ -996,7 +1073,24 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
           </div>
           <div className="info-item">
             <strong>Estado:</strong>{" "}
-            <span style={{ color: "#10b981" }}>En tránsito</span>
+            <span style={{
+              color: selectedForMap.estado === "ENTREGADO"
+                ? "#10b981"
+                : selectedForMap.estado === "INCIDENTE_REPORTADO"
+                  ? "#ef4444"
+                  : selectedForMap.estado === "CANCELADO"
+                    ? "#64748b"
+                    : "#3b82f6",
+              fontWeight: "bold"
+            }}>
+              {selectedForMap.estado === "ENTREGADO"
+                ? "Entregado"
+                : selectedForMap.estado === "CANCELADO"
+                  ? "Cancelado"
+                  : selectedForMap.estado === "INCIDENTE_REPORTADO"
+                    ? "Incidente"
+                    : "En tránsito"}
+            </span>
           </div>
           {telemetry && (
             <>

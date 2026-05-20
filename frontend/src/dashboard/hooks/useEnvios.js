@@ -51,12 +51,34 @@ export function useEnvios() {
       );
     };
 
+    const handleEnvioUpdated = (data) => {
+      setEnvios((prevEnvios) =>
+        prevEnvios.map((envio) =>
+          String(envio.id_envio) === String(data.id_envio)
+            ? { ...envio, ...data }
+            : envio
+        )
+      );
+    };
+
+    const handleEnvioCreated = (data) => {
+      setEnvios((prevEnvios) => {
+        const exists = prevEnvios.some((envio) => String(envio.id_envio) === String(data.id_envio));
+        if (exists) return prevEnvios;
+        return [data, ...prevEnvios];
+      });
+    };
+
     const unsubscribeTelemetry = socketService.onTelemetryUpdate(handleNewTelemetry);
     const unsubscribeIncident = socketService.onIncidentNew(handleNewIncident);
+    const unsubscribeEnvioUpdated = socketService.onEnvioUpdated(handleEnvioUpdated);
+    const unsubscribeEnvioCreated = socketService.onEnvioCreated(handleEnvioCreated);
 
     return () => {
       if (unsubscribeTelemetry) unsubscribeTelemetry();
       if (unsubscribeIncident) unsubscribeIncident();
+      if (unsubscribeEnvioUpdated) unsubscribeEnvioUpdated();
+      if (unsubscribeEnvioCreated) unsubscribeEnvioCreated();
     };
   }, []);
 

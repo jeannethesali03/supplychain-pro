@@ -27,6 +27,28 @@ const TelemetryPanel = ({ selectedEnvio, rupturas = [] }) => {
 
   // Mostrar todos los incidentes
   const allIncidents = incidents || [];
+  const latestRuptura = rupturas && rupturas.length > 0
+    ? rupturas.reduce((latest, current) => {
+        const latestTs = Date.parse(latest.timestamp || latest.fecha_creacion || latest.created_at || latest.fecha || "");
+        const currentTs = Date.parse(current.timestamp || current.fecha_creacion || current.created_at || current.fecha || "");
+
+        if (Number.isNaN(latestTs) && Number.isNaN(currentTs)) return current;
+        if (Number.isNaN(latestTs)) return current;
+        if (Number.isNaN(currentTs)) return latest;
+        return currentTs >= latestTs ? current : latest;
+      }, rupturas[0])
+    : null;
+
+  const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const num = Number(value);
+    return Number.isNaN(num) ? null : num;
+  };
+
+  const telemetryTemp = toNumber(telemetry?.temperatura);
+  const rupturaTemp = toNumber(latestRuptura?.temperatura ?? latestRuptura?.valor_registrado);
+  const temperatureValue = telemetryTemp ?? rupturaTemp;
+  const temperatureText = temperatureValue !== null ? temperatureValue.toFixed(1) : "N/A";
 
   return (
     <div className="telemetry-panel">
@@ -41,7 +63,7 @@ const TelemetryPanel = ({ selectedEnvio, rupturas = [] }) => {
         <div className="card-body">
           <div className="telemetry-item">
             <span className="icon">🌡️</span>
-            <p>{telemetry?.temperatura ?? "N/A"} °C</p>
+            <p>{temperatureText} °C</p>
             <span>Temperatura</span>
           </div>
           <div className="telemetry-item">

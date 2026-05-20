@@ -474,7 +474,7 @@ app.post(
     }
 
     // Elevar la temperatura
-    journey.telemetria.temperatura = Math.min(journey.tempMax + 7, 25);
+    journey.telemetria.temperatura = 12;
 
     // Crear incidente en el backend
     try {

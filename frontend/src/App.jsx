@@ -33,6 +33,15 @@ function formatBytes(value) {
   return `${size.toFixed(1)} ${units[unitIndex]}`;
 }
 
+function formatNumber(value, digits) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
+  return Number(value).toFixed(digits);
+}
+
+function formatCoord(value) {
+  return formatNumber(value, 5);
+}
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [user, setUser] = useState(() => {
@@ -42,9 +51,20 @@ function App() {
   const [loginForm, setLoginForm] = useState(EMPTY_LOGIN);
   const [envios, setEnvios] = useState([]);
   const [rutas, setRutas] = useState([]);
+  const [vehiculos, setVehiculos] = useState([]);
+  const [newEnvio, setNewEnvio] = useState({
+    codigo_rastreo: "",
+    origen: "San Salvador - Bodega Central",
+    destino: "",
+    id_ruta: "",
+    temp_min_permitida: 0,
+    temp_max_permitida: 5,
+    id_vehiculo: "",
+  });
   const [selectedEnvioId, setSelectedEnvioId] = useState("");
   const [selectedRutaId, setSelectedRutaId] = useState("");
-  const [speed, setSpeed] = useState(6);
+  const [tempMin, setTempMin] = useState("");
+  const [tempMax, setTempMax] = useState("");
   const [stream, setStream] = useState([]);
   const [latestTelemetry, setLatestTelemetry] = useState(null);
   const [latestIncident, setLatestIncident] = useState(null);
@@ -65,6 +85,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [journeyProgress, setJourneyProgress] = useState(null);
 
   const streamCounter = useRef(0);
   const streamBodyRef = useRef(null);
@@ -148,31 +169,7 @@ function App() {
       safePayload.server_timestamp ||
       new Date().toISOString();
     const envioId = safePayload.id_envio ?? null;
-    const entries = [];
-
-    if (safePayload.temperatura !== undefined) {
-      entries.push({ envio_id: envioId, sensor: "temperatura", value: safePayload.temperatura, timestamp });
-    }
-    if (safePayload.humedad !== undefined) {
-      entries.push({ envio_id: envioId, sensor: "humedad", value: safePayload.humedad, timestamp });
-    }
-    if (safePayload.porcentaje_bateria !== undefined) {
-      entries.push({ envio_id: envioId, sensor: "bateria", value: safePayload.porcentaje_bateria, timestamp });
-    }
-    if (safePayload.latitud !== undefined && safePayload.longitud !== undefined) {
-      entries.push({
-        envio_id: envioId,
-        sensor: "gps",
-        value: { latitud: safePayload.latitud, longitud: safePayload.longitud },
-        timestamp,
-      });
-    }
-
-    if (!entries.length) {
-      entries.push({ envio_id: envioId, sensor: "telemetria", value: safePayload, timestamp });
-    }
-
-    return entries;
+    return [{ envio_id: envioId, sensor: "telemetria", value: safePayload, timestamp }];
   }, []);
 
   const pushEvent = useCallback((type, payload) => {
@@ -212,12 +209,14 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const [enviosPayload, rutasPayload] = await Promise.all([
+      const [enviosPayload, rutasPayload, vehiculosPayload] = await Promise.all([
         fetchApi("/envios"),
         fetchApi("/rutas"),
+        fetchApi("/vehiculos"),
       ]);
       setEnvios(enviosPayload);
       setRutas(rutasPayload);
+      setVehiculos(vehiculosPayload);
       if (enviosPayload.length && !selectedEnvioId) {
         setSelectedEnvioId(String(enviosPayload[0].id_envio));
       }
@@ -258,6 +257,21 @@ function App() {
       setSelectedRutaId(String(envio.id_ruta));
     }
   }, [envios, selectedEnvioId, selectedRutaId]);
+
+  useEffect(() => {
+    if (!selectedEnvioId) {
+      setTempMin("");
+      setTempMax("");
+      return;
+    }
+    const envio = envios.find(
+      (item) => String(item.id_envio) === String(selectedEnvioId),
+    );
+    const minValue = envio?.temp_min_permitida;
+    const maxValue = envio?.temp_max_permitida;
+    setTempMin(minValue === null || minValue === undefined ? "" : String(minValue));
+    setTempMax(maxValue === null || maxValue === undefined ? "" : String(maxValue));
+  }, [envios, selectedEnvioId]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -349,6 +363,101 @@ function App() {
     setMessage("Sesion cerrada");
   };
 
+  // Autogenerar código de rastreo
+  useEffect(() => {
+    if (token && user && !newEnvio.codigo_rastreo) {
+      setNewEnvio((prev) => ({
+        ...prev,
+        codigo_rastreo: `ENV-NEW-${1000 + Math.floor(Math.random() * 9000)}`,
+      }));
+    }
+  }, [token, user, newEnvio.codigo_rastreo]);
+
+  const handleNewEnvioRutaChange = (routeId) => {
+    const route = rutas.find((r) => String(r.id_ruta) === String(routeId));
+    let dest = "Destino General";
+    if (route) {
+      const nameObj = route.nombre.toLowerCase();
+      if (nameObj.includes("libertad")) dest = "Puerto La Libertad - Terminal Frio";
+      else if (nameObj.includes("aeropuerto")) dest = "Aeropuerto El Salvador - Carga Aerea";
+      else if (nameObj.includes("santa ana")) dest = "Santa Ana - Centro de Distribucion";
+      else if (nameObj.includes("san miguel")) dest = "San Miguel - Bodega Regional";
+      else if (nameObj.includes("chalatenango")) dest = "Chalatenango - Almacen Norte";
+      else if (nameObj.includes("zacatecoluca")) dest = "Zacatecoluca - Mercado Mayorista";
+    }
+    setNewEnvio((prev) => ({
+      ...prev,
+      id_ruta: routeId,
+      destino: dest,
+    }));
+  };
+
+  const handleCreateEnvio = async (e) => {
+    e.preventDefault();
+    if (
+      !newEnvio.codigo_rastreo ||
+      !newEnvio.origen ||
+      !newEnvio.destino ||
+      !newEnvio.id_ruta ||
+      !newEnvio.id_vehiculo
+    ) {
+      setError("Todos los campos son obligatorios para crear un envío");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      // 1. Crear Envío
+      const res = await fetchApi("/envios", {
+        method: "POST",
+        body: {
+          codigo_rastreo: newEnvio.codigo_rastreo,
+          origen: newEnvio.origen,
+          destino: newEnvio.destino,
+          id_ruta: Number(newEnvio.id_ruta),
+          temp_min_permitida: Number(newEnvio.temp_min_permitida),
+          temp_max_permitida: Number(newEnvio.temp_max_permitida),
+        },
+      });
+
+      const newIdEnvio = res.id_envio;
+
+      // 2. Crear Asignación Envío-Vehículo
+      await fetchApi("/envios-vehiculos", {
+        method: "POST",
+        body: {
+          id_envio: Number(newIdEnvio),
+          id_vehiculo: Number(newEnvio.id_vehiculo),
+        },
+      });
+
+      setMessage(`Envío ${newEnvio.codigo_rastreo} creado y asignado exitosamente.`);
+
+      // Resetear formulario
+      setNewEnvio({
+        codigo_rastreo: "",
+        origen: "San Salvador - Bodega Central",
+        destino: "",
+        id_ruta: "",
+        temp_min_permitida: 0,
+        temp_max_permitida: 5,
+        id_vehiculo: "",
+      });
+
+      // Recargar catálogos
+      await loadCatalogs();
+
+      // Seleccionar automáticamente el envío y la ruta creados
+      setSelectedEnvioId(String(newIdEnvio));
+      setSelectedRutaId(String(newEnvio.id_ruta));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const selectedEnvio = envios.find(
     (item) => String(item.id_envio) === String(selectedEnvioId),
   );
@@ -384,6 +493,18 @@ function App() {
       setError("La ruta seleccionada no tiene waypoints validos");
       return;
     }
+    const tempMinValue =
+      tempMin === "" ? selectedEnvio.temp_min_permitida : Number(tempMin);
+    const tempMaxValue =
+      tempMax === "" ? selectedEnvio.temp_max_permitida : Number(tempMax);
+    if (!Number.isFinite(tempMinValue) || !Number.isFinite(tempMaxValue)) {
+      setError("Define temperaturas min y max validas");
+      return;
+    }
+    if (tempMinValue >= tempMaxValue) {
+      setError("La temperatura minima debe ser menor que la maxima");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -392,8 +513,8 @@ function App() {
         body: {
           id_envio: selectedEnvio.id_envio,
           id_ruta: selectedRuta.id_ruta,
-          temp_min_permitida: selectedEnvio.temp_min_permitida,
-          temp_max_permitida: selectedEnvio.temp_max_permitida,
+          temp_min_permitida: tempMinValue,
+          temp_max_permitida: tempMaxValue,
           waypoints,
         },
       });
@@ -426,6 +547,29 @@ function App() {
     const intervalId = setInterval(loadStorageStatus, STORAGE_POLL_MS);
     return () => clearInterval(intervalId);
   }, [token, user, loadStorageStatus]);
+
+  const loadJourneyStatus = useCallback(async () => {
+    if (!token || !selectedEnvioId) {
+      setJourneyProgress(null);
+      return;
+    }
+    try {
+      const payload = await fetchApi(`/simulator/journeys/${selectedEnvioId}`);
+      setJourneyProgress(payload);
+    } catch {
+      setJourneyProgress(null);
+    }
+  }, [fetchApi, selectedEnvioId, token]);
+
+  useEffect(() => {
+    if (!token || !user || !selectedEnvioId) {
+      setJourneyProgress(null);
+      return undefined;
+    }
+    loadJourneyStatus();
+    const intervalId = setInterval(loadJourneyStatus, 2000);
+    return () => clearInterval(intervalId);
+  }, [token, user, selectedEnvioId, loadJourneyStatus]);
 
   const checkExternalAccess = useCallback(async () => {
     setCheckingExternal(true);
@@ -584,6 +728,45 @@ function App() {
 
   const telemetryStatus = latestTelemetry || {};
 
+  const buildTelemetryLines = (payload) => {
+    const sensor = payload?.sensor || "telemetria";
+    const value = payload?.value;
+    const envioId = payload?.envio_id ?? value?.id_envio ?? "--";
+
+    if (sensor !== "telemetria" || !value || typeof value !== "object") {
+      return [
+        `Envio: ${envioId}`,
+        `Sensor: ${sensor}`,
+        `Valor: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+      ].join("\n");
+    }
+
+    const telemetryObject = value;
+    const temperatura = telemetryObject.temperatura;
+    const humedad = telemetryObject.humedad;
+    const bateria = telemetryObject.porcentaje_bateria;
+    const lat = telemetryObject.latitud;
+    const lng = telemetryObject.longitud;
+
+    const lines = [
+      `Envio: ${envioId}`,
+      `Temperatura: ${formatNumber(temperatura, 2)} C`,
+      `Humedad: ${formatNumber(humedad, 1)} %`,
+      `Bateria: ${formatNumber(bateria, 0)} %`,
+      `Ubicacion: ${formatCoord(lat)}, ${formatCoord(lng)}`,
+    ];
+
+    const telemetryExtras = Object.entries(telemetryObject).filter(
+      ([key]) => !["temperatura", "humedad", "porcentaje_bateria", "latitud", "longitud", "id_envio"].includes(key),
+    );
+
+    if (telemetryExtras.length) {
+      lines.push(`Extra: ${JSON.stringify(Object.fromEntries(telemetryExtras))}`);
+    }
+
+    return lines.join("\n");
+  };
+
   return (
     <div className="app-shell">
     <header className="app-header">
@@ -617,23 +800,118 @@ function App() {
         ) : (
           <section className="simulation-layout">
             <div className="control-panel">
-              <div className="panel-card diagram-card">
-                <div className="card-title">Virtual Control Transacciones</div>
-                <div className="diagram">
-                  <div className="diagram-row">
-                    <div className="diagram-node">Terminal</div>
-                    <div className="diagram-node">Control</div>
-                    <div className="diagram-node">Cliente</div>
-                  </div>
-                  <div className="diagram-row">
-                    <div className="diagram-node">Contratos</div>
-                    <div className="diagram-node">Auditoria</div>
-                  </div>
+              {isAdmin && (
+                <div className="panel-card create-envio-card">
+                  <div className="card-title">Crear Nuevo Envío</div>
+                  <form onSubmit={handleCreateEnvio}>
+                    <div className="form-row">
+                      <label>
+                        Código Rastreo
+                        <input
+                          type="text"
+                          value={newEnvio.codigo_rastreo}
+                          onChange={(e) => setNewEnvio({ ...newEnvio, codigo_rastreo: e.target.value })}
+                          required
+                          disabled={loading}
+                        />
+                      </label>
+                      <label>
+                        Vehículo
+                        <select
+                          value={newEnvio.id_vehiculo}
+                          onChange={(e) => setNewEnvio({ ...newEnvio, id_vehiculo: e.target.value })}
+                          required
+                          disabled={loading}
+                        >
+                          <option value="">Seleccionar</option>
+                          {vehiculos.map((v) => (
+                            <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                              {v.placa} {v.activo ? "" : "(Inactivo)"}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="form-row">
+                      <label>
+                        Ruta
+                        <select
+                          value={newEnvio.id_ruta}
+                          onChange={(e) => handleNewEnvioRutaChange(e.target.value)}
+                          required
+                          disabled={loading}
+                        >
+                          <option value="">Seleccionar</option>
+                          {rutas.map((r) => (
+                            <option key={r.id_ruta} value={r.id_ruta}>
+                              {r.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="form-row">
+                      <label>
+                        Origen
+                        <input
+                          type="text"
+                          value={newEnvio.origen}
+                          onChange={(e) => setNewEnvio({ ...newEnvio, origen: e.target.value })}
+                          required
+                          disabled={loading}
+                        />
+                      </label>
+                      <label>
+                        Destino
+                        <input
+                          type="text"
+                          value={newEnvio.destino}
+                          onChange={(e) => setNewEnvio({ ...newEnvio, destino: e.target.value })}
+                          required
+                          disabled={loading}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="form-row">
+                      <label>
+                        Temp mín (C)
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newEnvio.temp_min_permitida}
+                          onChange={(e) => setNewEnvio({ ...newEnvio, temp_min_permitida: e.target.value })}
+                          required
+                          disabled={loading}
+                        />
+                      </label>
+                      <label>
+                        Temp máx (C)
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newEnvio.temp_max_permitida}
+                          onChange={(e) => setNewEnvio({ ...newEnvio, temp_max_permitida: e.target.value })}
+                          required
+                          disabled={loading}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="button-row">
+                      <button
+                        className="primary-button"
+                        type="submit"
+                        disabled={loading}
+                      >
+                        {loading ? "Creando..." : "Crear Envío"}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-                <div className="diagram-caption">
-                  Cadena de custodia digital para cada envio
-                </div>
-              </div>
+              )}
 
               <div className="panel-card control-card">
                 <div className="card-title">Inyectar recorrido normal</div>
@@ -672,18 +950,25 @@ function App() {
                   </label>
                 </div>
 
-                <div className="form-row slider-row">
+                <div className="form-row">
                   <label>
-                    Velocidad simulada
+                    Temp min (C)
                     <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={speed}
-                      onChange={(event) => setSpeed(Number(event.target.value))}
+                      type="number"
+                      step="0.1"
+                      value={tempMin}
+                      onChange={(event) => setTempMin(event.target.value)}
                     />
                   </label>
-                  <div className="speed-badge">{speed}x</div>
+                  <label>
+                    Temp max (C)
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={tempMax}
+                      onChange={(event) => setTempMax(event.target.value)}
+                    />
+                  </label>
                 </div>
 
                 <div className="button-row">
@@ -725,13 +1010,13 @@ function App() {
                   <div>
                     <span>Temp min</span>
                     <strong>
-                      {selectedEnvio?.temp_min_permitida ?? "--"} C
+                      {(tempMin !== "" ? tempMin : selectedEnvio?.temp_min_permitida) ?? "--"} C
                     </strong>
                   </div>
                   <div>
                     <span>Temp max</span>
                     <strong>
-                      {selectedEnvio?.temp_max_permitida ?? "--"} C
+                      {(tempMax !== "" ? tempMax : selectedEnvio?.temp_max_permitida) ?? "--"} C
                     </strong>
                   </div>
                   <div>
@@ -865,6 +1150,31 @@ function App() {
                     <strong>{formatClock(externalAccess.checkedAt)}</strong>
                   </div>
                 </div>
+                {journeyProgress && (
+                  <div className="journey-progress-container" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "0.85rem" }}>
+                      <span style={{ fontWeight: 600, color: "#475569" }}>
+                        Progreso del Envío: {Math.round(journeyProgress.progreso)}%
+                      </span>
+                      <span style={{ fontWeight: 600, color: journeyProgress.estado === "FINALIZADO" ? "#10b981" : "#3b82f6" }}>
+                        {journeyProgress.estado === "FINALIZADO" ? "✓ Completado" : journeyProgress.estado === "PAUSADO" ? "⏸ Pausado" : "🚚 En Tránsito"}
+                      </span>
+                    </div>
+                    <div className="progress-bar-bg" style={{ width: "100%", height: "8px", background: "#e2e8f0", borderRadius: "4px", overflow: "hidden", position: "relative" }}>
+                      <div className="progress-bar-fill" style={{
+                        width: `${journeyProgress.progreso}%`,
+                        height: "100%",
+                        background: journeyProgress.estado === "FINALIZADO" ? "linear-gradient(90deg, #10b981, #059669)" : "linear-gradient(90deg, #3b82f6, #2563eb)",
+                        transition: "width 0.5s ease-out",
+                        borderRadius: "4px"
+                      }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", fontSize: "0.75rem", color: "#64748b" }}>
+                      <span>Transcurrido: {journeyProgress.tiempo_transcurrido_seg}s</span>
+                      <span>Total: {journeyProgress.duracion_total_seg}s</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="panel-card storage-card">
@@ -935,20 +1245,27 @@ function App() {
                 </div>
                 <div className="stream-body" ref={streamBodyRef}>
                   {stream.length ? (
-                    stream.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className={`stream-line ${entry.type}`}
-                      >
-                        <div className="stream-meta">
-                          <span>{formatClock(entry.timestamp)}</span>
-                          <span className="stream-type">{entry.type}</span>
+                    stream.map((entry) => {
+                      const isTelemetry = entry.type === "telemetry";
+                      const payloadText = isTelemetry
+                        ? buildTelemetryLines(entry.payload)
+                        : JSON.stringify(entry.payload, null, 2);
+
+                      return (
+                        <div
+                          key={entry.id}
+                          className={`stream-line ${entry.type}`}
+                        >
+                          <div className="stream-meta">
+                            <span>{formatClock(entry.timestamp)}</span>
+                            <span className="stream-type">{entry.type}</span>
+                          </div>
+                          <pre className="stream-json">
+                            {payloadText}
+                          </pre>
                         </div>
-                        <pre className="stream-json">
-                          {JSON.stringify(entry.payload)}
-                        </pre>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="stream-empty">
                       Esperando eventos del simulador...

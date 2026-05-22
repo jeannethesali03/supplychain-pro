@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { activeJourneys, iniciarViaje, finalizarViaje, iniciarTelemetria, persistJourneys } = require('../controllers/journeyController');
+const { activeJourneys, iniciarViaje, cancelarViaje, iniciarTelemetria, persistJourneys } = require('../controllers/journeyController');
 
 /**
  * GET /api/simulator/health
@@ -141,7 +141,7 @@ router.post('/:id_envio/resume', (req, res) => {
  * POST /api/simulator/journeys/:id_envio/stop
  * Detiene un viaje
  */
-router.post('/:id_envio/stop', (req, res) => {
+router.post('/:id_envio/stop', async (req, res) => {
   const { id_envio } = req.params;
   const journey = activeJourneys.get(Number(id_envio));
 
@@ -149,7 +149,7 @@ router.post('/:id_envio/stop', (req, res) => {
     return res.status(404).json({ error: 'Viaje no encontrado' });
   }
 
-  finalizarViaje(Number(id_envio));
+  await cancelarViaje(Number(id_envio));
   activeJourneys.delete(Number(id_envio));
   persistJourneys();
 

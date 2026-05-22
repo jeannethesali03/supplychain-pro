@@ -161,20 +161,20 @@ VALUES
 
 -- Seeds de demo (evitan duplicados por clave unica)
 INSERT IGNORE INTO rutas (id_ruta, nombre, waypoints_json, fecha_creacion) VALUES
-  (7, 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:24:51'),
-  (8, 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:36:19'),
-  (9, 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:40:29'),
-  (10, 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:42:09'),
-  (11, 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:45:09'),
-  (12, 'Ruta CA-4: San Salvador - Puerto de La Libertad (Prueba)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:49:23');
+  (7, 'Ruta SS -> Puerto La Libertad (Costa)', '[{"lat":13.68,"lng":-89.23},{"lat":13.675,"lng":-89.235},{"lat":13.67,"lng":-89.24},{"lat":13.665,"lng":-89.245},{"lat":13.66,"lng":-89.25},{"lat":13.655,"lng":-89.253},{"lat":13.65,"lng":-89.256},{"lat":13.645,"lng":-89.258},{"lat":13.64,"lng":-89.26},{"lat":13.63,"lng":-89.263},{"lat":13.62,"lng":-89.266},{"lat":13.61,"lng":-89.27}]', '2026-05-04 02:24:51'),
+  (8, 'Ruta SS -> Aeropuerto El Salvador', '[{"lat":13.69,"lng":-89.24},{"lat":13.67,"lng":-89.2},{"lat":13.65,"lng":-89.16},{"lat":13.62,"lng":-89.12},{"lat":13.56,"lng":-89.08},{"lat":13.49,"lng":-89.06},{"lat":13.44,"lng":-89.05}]', '2026-05-04 02:36:19'),
+  (9, 'Ruta SS -> Santa Ana (Occidente)', '[{"lat":13.69,"lng":-89.24},{"lat":13.71,"lng":-89.3},{"lat":13.74,"lng":-89.36},{"lat":13.79,"lng":-89.4},{"lat":13.85,"lng":-89.46},{"lat":13.93,"lng":-89.52},{"lat":13.98,"lng":-89.56}]', '2026-05-04 02:40:29'),
+  (10, 'Ruta SS -> San Miguel (Oriente)', '[{"lat":13.69,"lng":-89.24},{"lat":13.67,"lng":-89.1},{"lat":13.62,"lng":-88.9},{"lat":13.57,"lng":-88.7},{"lat":13.52,"lng":-88.45},{"lat":13.49,"lng":-88.3},{"lat":13.48,"lng":-88.17}]', '2026-05-04 02:42:09'),
+  (11, 'Ruta SS -> Chalatenango (Norte)', '[{"lat":13.69,"lng":-89.24},{"lat":13.74,"lng":-89.23},{"lat":13.8,"lng":-89.2},{"lat":13.86,"lng":-89.18},{"lat":13.92,"lng":-89.15},{"lat":13.98,"lng":-89.11},{"lat":14.05,"lng":-89.08}]', '2026-05-04 02:45:09'),
+  (12, 'Ruta SS -> Zacatecoluca (La Paz)', '[{"lat":13.69,"lng":-89.24},{"lat":13.66,"lng":-89.1},{"lat":13.62,"lng":-89.02},{"lat":13.58,"lng":-88.95},{"lat":13.55,"lng":-88.9},{"lat":13.53,"lng":-88.88},{"lat":13.52,"lng":-88.86}]', '2026-05-04 02:49:23');
 
 INSERT IGNORE INTO envios (id_envio, codigo_rastreo, origen, destino, id_ruta, temp_max_permitida, temp_min_permitida, estado, fecha_creacion) VALUES
-  (13, 'SHIP-1777861491808', 'San Salvador', 'Puerto de La Libertad', 7, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:24:51'),
-  (14, 'SHIP-1777862179349', 'San Salvador', 'Puerto de La Libertad', 8, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:36:19'),
-  (15, 'SHIP-1777862429452', 'San Salvador', 'Puerto de La Libertad', 9, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:40:29'),
-  (16, 'SHIP-1777862529844', 'San Salvador', 'Puerto de La Libertad', 10, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:42:09'),
-  (17, 'SHIP-1777862709295', 'San Salvador', 'Puerto de La Libertad', 11, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:45:09'),
-  (18, 'SHIP-1777862963979', 'San Salvador', 'Puerto de La Libertad', 12, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:49:23');
+  (13, 'ENV-SS-PLD-0001', 'San Salvador - Bodega Central', 'Puerto La Libertad - Terminal Frio', 7, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:24:51'),
+  (14, 'ENV-SS-AES-0002', 'San Salvador - Bodega Central', 'Aeropuerto El Salvador - Carga Aerea', 8, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:36:19'),
+  (15, 'ENV-SS-SANA-0003', 'San Salvador - Bodega Central', 'Santa Ana - Centro de Distribucion', 9, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:40:29'),
+  (16, 'ENV-SS-SMIG-0004', 'San Salvador - Bodega Central', 'San Miguel - Bodega Regional', 10, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:42:09'),
+  (17, 'ENV-SS-CHAL-0005', 'San Salvador - Bodega Central', 'Chalatenango - Almacen Norte', 11, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:45:09'),
+  (18, 'ENV-SS-ZACA-0006', 'San Salvador - Bodega Central', 'Zacatecoluca - Mercado Mayorista', 12, 5.00, 0.00, 'EN_TRANSITO', '2026-05-04 02:49:23');
 
 INSERT IGNORE INTO vehiculos (id_vehiculo, placa, activo) VALUES
   (1, 'P-448787', 1),

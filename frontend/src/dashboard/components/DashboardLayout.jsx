@@ -17,12 +17,18 @@ import ConfiguracionView from "./ConfiguracionView";
 import Footer from "./Footer";
 import TelemetryPanel from "./TelemetryPanel";
 import apiService from "../services/apiService";
+import { useEnvios } from "../hooks/useEnvios.js";
 
 export default function DashboardLayout({ user, onLogout }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState("dashboard");
   const [selectedEnvio, setSelectedEnvio] = useState(null);
   const [rupturas, setRupturas] = useState([]);
+  const { envios } = useEnvios();
+
+  const currentSelectedEnvio = selectedEnvio
+    ? envios.find((e) => String(e.id_envio) === String(selectedEnvio.id_envio)) || selectedEnvio
+    : null;
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
@@ -30,15 +36,15 @@ export default function DashboardLayout({ user, onLogout }) {
 
   useEffect(() => {
     async function fetchRupturas() {
-      if (!selectedEnvio) {
+      if (!currentSelectedEnvio) {
         setRupturas([]);
         return;
       }
       try {
-        const res = await apiService.getTelemetriaByEnvio(selectedEnvio.id_envio);
+        const res = await apiService.getTelemetriaByEnvio(currentSelectedEnvio.id_envio);
         if (res.success && res.data) {
-          const tempMax = Number(selectedEnvio.temp_max_permitida ?? 15);
-const tempMin = Number(selectedEnvio.temp_min_permitida ?? -5);
+          const tempMax = Number(currentSelectedEnvio.temp_max_permitida ?? 15);
+          const tempMin = Number(currentSelectedEnvio.temp_min_permitida ?? -5);
           const breaches = res.data.filter((t) => {
             const temp = Number(t.temperatura);
             return !Number.isNaN(temp) && (temp > tempMax || temp < tempMin);
@@ -53,7 +59,7 @@ const tempMin = Number(selectedEnvio.temp_min_permitida ?? -5);
       }
     }
     fetchRupturas();
-  }, [selectedEnvio]);
+  }, [currentSelectedEnvio]);
 
   const renderMainContent = () => {
     switch (activeView) {
@@ -61,11 +67,12 @@ const tempMin = Number(selectedEnvio.temp_min_permitida ?? -5);
         return (
           <div className="dashboard-main">
             <MapContainer
-              selectedEnvio={selectedEnvio}
+              selectedEnvio={currentSelectedEnvio}
               onSelectEnvio={setSelectedEnvio}
               rupturas={rupturas}
+              envios={envios}
             />
-            <TelemetryPanel selectedEnvio={selectedEnvio} rupturas={rupturas} />
+            <TelemetryPanel selectedEnvio={currentSelectedEnvio} rupturas={rupturas} />
           </div>
         );
 

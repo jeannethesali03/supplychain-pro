@@ -2,74 +2,85 @@
  * Hook useEnvios - Manejo de datos de envíos
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import apiService from "../services/apiService.js";
-import storageService from "../services/storageService.js";
+import socketService from "../services/socketService.js";
 
-export function useEnvios(autoLoad = true) {
+export function useEnvios() {
   const [envios, setEnvios] = useState([]);
-  const [selectedEnvio, setSelectedEnvio] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const loadEnvios = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    const result = await apiService.getEnvios();
-
-    if (result.success) {
-      setEnvios(result.data || []);
-      
-      // Si hay un último envío activo, seleccionarlo
-      const lastEnvio = storageService.getLastActiveEnvio();
-      if (lastEnvio && result.data) {
-        const found = result.data.find((e) => e.id_envio === parseInt(lastEnvio));
-        if (found) {
-          setSelectedEnvio(found);
-        }
-      }
-
-      setError("");
-    } else {
-      setError(result.error);
-    }
-
-    setLoading(false);
-  }, []);
-
-  // Cargar envíos al montar
   useEffect(() => {
-    if (autoLoad) {
-      loadEnvios();
-    }
-  }, [autoLoad, loadEnvios]);
+    const fetchEnvios = async () => {
+      try {
+        const response = await apiService.getEnvios();
+        if (response && Array.isArray(response.data)) {
+          setEnvios(response.data);
+        } else {
+          // Handle cases where response.data is not an array or is missing
+          console.warn("La respuesta de la API de envíos no es un array válido:", response);
+          setEnvios([]);
+        }
+      } catch (err) {
+        setError(err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const selectEnvio = useCallback((envio) => {
-    setSelectedEnvio(envio);
-    if (envio) {
-      storageService.setLastActiveEnvio(envio.id_envio);
-    }
+    fetchEnvios();
+
+    const handleNewTelemetry = (data) => {
+      setEnvios((prevEnvios) =>
+        prevEnvios.map((envio) =>
+          envio.id_envio === data.id_envio
+            ? { ...envio, telemetria: data }
+            : envio
+        )
+      );
+    };
+
+    const handleNewIncident = (data) => {
+      setEnvios((prevEnvios) =>
+        prevEnvios.map((envio) =>
+          envio.id_envio === data.id_envio
+            ? { ...envio, incidencia: data }
+            : envio
+        )
+      );
+    };
+
+    const handleEnvioUpdated = (data) => {
+      setEnvios((prevEnvios) =>
+        prevEnvios.map((envio) =>
+          String(envio.id_envio) === String(data.id_envio)
+            ? { ...envio, ...data }
+            : envio
+        )
+      );
+    };
+
+    const handleEnvioCreated = (data) => {
+      setEnvios((prevEnvios) => {
+        const exists = prevEnvios.some((envio) => String(envio.id_envio) === String(data.id_envio));
+        if (exists) return prevEnvios;
+        return [data, ...prevEnvios];
+      });
+    };
+
+    const unsubscribeTelemetry = socketService.onTelemetryUpdate(handleNewTelemetry);
+    const unsubscribeIncident = socketService.onIncidentNew(handleNewIncident);
+    const unsubscribeEnvioUpdated = socketService.onEnvioUpdated(handleEnvioUpdated);
+    const unsubscribeEnvioCreated = socketService.onEnvioCreated(handleEnvioCreated);
+
+    return () => {
+      if (unsubscribeTelemetry) unsubscribeTelemetry();
+      if (unsubscribeIncident) unsubscribeIncident();
+      if (unsubscribeEnvioUpdated) unsubscribeEnvioUpdated();
+      if (unsubscribeEnvioCreated) unsubscribeEnvioCreated();
+    };
   }, []);
 
-  const getEnvioById = useCallback(
-    (id) => {
-      return envios.find((e) => e.id_envio === parseInt(id));
-    },
-    [envios]
-  );
-
-  const refreshEnvios = useCallback(() => {
-    return loadEnvios();
-  }, [loadEnvios]);
-
-  return {
-    envios,
-    selectedEnvio,
-    loading,
-    error,
-    selectEnvio,
-    getEnvioById,
-    refreshEnvios,
-  };
+  return { envios, loading, error };
 }

@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { emitEvent } = require('../socket');
 
 exports.listEnvios = async (req, res, next) => {
   try {
@@ -27,7 +28,18 @@ exports.createEnvio = async (req, res, next) => {
       'INSERT INTO envios (codigo_rastreo, origen, destino, id_ruta, temp_max_permitida, temp_min_permitida) VALUES (?, ?, ?, ?, ?, ?)',
       [codigo_rastreo, origen, destino, id_ruta, temp_max_permitida, temp_min_permitida]
     );
-    res.status(201).json({ id_envio: result.insertId });
+    const id_envio = result.insertId;
+    emitEvent('envio:created', {
+      id_envio,
+      codigo_rastreo,
+      origen,
+      destino,
+      id_ruta,
+      temp_max_permitida,
+      temp_min_permitida,
+      estado: 'EN_TRANSITO'
+    });
+    res.status(201).json({ id_envio });
   } catch (err) {
     next(err);
   }
@@ -42,6 +54,12 @@ exports.updateEnvio = async (req, res, next) => {
     const values = keys.map(k => fields[k]);
     const set = keys.map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE envios SET ${set} WHERE id_envio = ?`, [...values, id]);
+    
+    emitEvent('envio:updated', {
+      id_envio: Number(id),
+      ...fields
+    });
+    
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -57,3 +75,4 @@ exports.deleteEnvio = async (req, res, next) => {
     next(err);
   }
 };
+

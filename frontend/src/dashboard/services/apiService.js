@@ -95,18 +95,17 @@ class ApiService {
   }
 
   // ====== Telemetría ======
-  async getTelemetria(params = {}) {
+  async getTelemetriaByEnvio(envioId, params = {}) {
+    if (!envioId) {
+      return { success: false, error: "envioId requerido" };
+    }
     const query = new URLSearchParams(params).toString();
-    const endpoint = `/registrosTelemetria${query ? `?${query}` : ""}`;
+    const endpoint = `/registrosTelemetria/envio/${envioId}${query ? `?${query}` : ""}`;
     return this.request(endpoint);
   }
 
-  async getTelemetriaByVehiculo(vehiculoId) {
-    return this.request(`/registrosTelemetria?id_vehiculo=${vehiculoId}`);
-  }
-
-  async getUltimaTelemetria(vehiculoId) {
-    const result = await this.getTelemetriaByVehiculo(vehiculoId);
+  async getUltimaTelemetria(envioId) {
+    const result = await this.getTelemetriaByEnvio(envioId, { limit: 1 });
     if (result.success && result.data && result.data.length > 0) {
       return { success: true, data: result.data[0] };
     }
@@ -120,8 +119,17 @@ class ApiService {
     return this.request(endpoint);
   }
 
-  async getIncidentesByVehiculo(vehiculoId) {
-    return this.request(`/incidentes?id_vehiculo=${vehiculoId}`);
+  async getIncidentesByEnvio(envioId) {
+    if (!envioId) {
+      return { success: false, error: "envioId requerido" };
+    }
+    // Backend no expone filtro por envío: se filtra en cliente.
+    const result = await this.getIncidentes();
+    if (!result.success) return result;
+    const filtered = Array.isArray(result.data)
+      ? result.data.filter((item) => item.id_envio === envioId)
+      : [];
+    return { success: true, data: filtered };
   }
 
   // ====== Rutas ======
@@ -144,7 +152,7 @@ class ApiService {
 
   // ====== Detalles Envío ======
   async getDetallesEnvio(envioId) {
-    return this.request(`/detallesEnvio/${envioId}`);
+    return this.request(`/detalles-envio?envio=${envioId}`);
   }
 
   // ====== Simulator ======

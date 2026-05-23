@@ -13,33 +13,56 @@ export function useIncidents(vehiculoId = null) {
   const [error, setError] = useState("");
   const unsubscribeRef = useRef(null);
 
+  const normalizeIncident = useCallback((incident) => {
+    if (!incident) return incident;
+    const tipo = incident.tipo || incident.tipo_incidente;
+    const timestamp = incident.timestamp || incident.fecha || incident.fecha_creacion;
+
+    const severityByType = {
+      RUPTURA_CADENA_FRIO: "critico",
+      TEMPERATURA_CRITICA: "critico",
+      BATERIA_BAJA: "advertencia",
+      GEOFENCE_VIOLATION: "advertencia",
+      PERDIDA_SENAL: "advertencia",
+      HUMEDAD_CRITICA: "critico",
+      ERROR_SENSOR: "informativo",
+    };
+
+    const severity = incident.severidad
+      || severityByType[(tipo || "").toString().toUpperCase()]
+      || "informativo";
+
+    return {
+      ...incident,
+      tipo,
+      severidad: severity,
+      timestamp,
+    };
+  }, []);
+
   const loadIncidents = useCallback(async () => {
     setLoading(true);
     setError("");
 
-    if (vehiculoId) {
-      const result = await apiService.getIncidentesByVehiculo(vehiculoId);
-      if (result.success) {
-        setIncidents(result.data || []);
-      } else {
-        setError(result.error);
-      }
+    const result = vehiculoId
+      ? await apiService.getIncidentesByEnvio(vehiculoId)
+      : await apiService.getIncidentes();
+
+    if (result.success) {
+      const normalized = (result.data || []).map(normalizeIncident);
+      setIncidents(normalized);
     } else {
-      const result = await apiService.getIncidentes();
-      if (result.success) {
-        setIncidents(result.data || []);
-      } else {
-        setError(result.error);
-      }
+      setError(result.error);
     }
 
     setLoading(false);
-  }, [vehiculoId]);
+  }, [vehiculoId, normalizeIncident]);
 
   const addIncident = useCallback((incident) => {
-    setIncidents((prev) => [incident, ...prev]);
-    storageService.addIncident(incident);
-  }, []);
+    const normalized = normalizeIncident(incident);
+    setIncidents((prev) => [normalized, ...prev]);
+    storageService.addIncident(normalized);
+  }, [normalizeIncident]);
 
   // Cargar incidentes al montar
   useEffect(() => {
@@ -48,14 +71,17 @@ export function useIncidents(vehiculoId = null) {
     // Restaurar incidentes guardados
     const saved = storageService.getIncidents();
     if (saved && saved.length > 0) {
-      setIncidents(saved);
+      const filtered = vehiculoId
+        ? saved.filter((item) => String(item.id_envio) === String(vehiculoId))
+        : saved;
+      setIncidents(filtered);
     }
-  }, [loadIncidents]);
+  }, [loadIncidents, vehiculoId]);
 
   // Suscribirse a nuevos incidentes
   useEffect(() => {
     unsubscribeRef.current = socketService.onIncidentNew((incident) => {
-      if (!vehiculoId || incident.id_vehiculo === vehiculoId) {
+      if (!vehiculoId || incident.id_envio === vehiculoId) {
         addIncident(incident);
       }
     });
@@ -92,6 +118,13 @@ export function useIncidents(vehiculoId = null) {
       perdida_senal: "Pérdida de Señal",
       error_sensor: "Error de Sensor",
       humedad_critica: "Humedad Crítica",
+      RUPTURA_CADENA_FRIO: "Ruptura Cadena de Frío",
+      BATERIA_BAJA: "Batería Baja",
+      GEOFENCE_VIOLATION: "Desvío de Ruta",
+      PERDIDA_SENAL: "Pérdida de Señal",
+      ERROR_SENSOR: "Error de Sensor",
+      HUMEDAD_CRITICA: "Humedad Crítica",
+      TEMPERATURA_CRITICA: "Temperatura Crítica",
     };
     return labels[type] || type || "Incidente Desconocido";
   }, []);

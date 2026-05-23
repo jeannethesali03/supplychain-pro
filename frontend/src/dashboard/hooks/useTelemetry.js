@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import apiService from "../services/apiService.js";
 import socketService from "../services/socketService.js";
 
-export function useTelemetry(vehiculoId) {
+export function useTelemetry(envioId) {
   const [telemetry, setTelemetry] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,12 +16,12 @@ export function useTelemetry(vehiculoId) {
   const unsubscribePositionRef = useRef(null);
 
   const loadTelemetry = useCallback(async () => {
-    if (!vehiculoId) return;
+    if (!envioId) return;
 
     setLoading(true);
     setError("");
 
-    const result = await apiService.getUltimaTelemetria(vehiculoId);
+    const result = await apiService.getUltimaTelemetria(envioId);
 
     if (result.success && result.data) {
       setTelemetry(result.data);
@@ -31,7 +31,7 @@ export function useTelemetry(vehiculoId) {
     }
 
     setLoading(false);
-  }, [vehiculoId]);
+  }, [envioId]);
 
   const addToHistory = useCallback((data) => {
     setHistory((prev) => {
@@ -43,18 +43,18 @@ export function useTelemetry(vehiculoId) {
 
   // Cargar telemetría inicial
   useEffect(() => {
-    if (vehiculoId) {
+    if (envioId) {
       loadTelemetry();
     }
-  }, [vehiculoId, loadTelemetry]);
+  }, [envioId, loadTelemetry]);
 
   // Suscribirse a actualizaciones en tiempo real
   useEffect(() => {
-    if (!vehiculoId) return;
+    if (!envioId) return;
 
     // Suscribirse a nuevas telemetrías
     unsubscribeRef.current = socketService.onTelemetryUpdate((data) => {
-      if (data && data.id_vehiculo === parseInt(vehiculoId)) {
+      if (data && data.id_envio === parseInt(envioId)) {
         setTelemetry(data);
         addToHistory(data);
       }
@@ -62,14 +62,14 @@ export function useTelemetry(vehiculoId) {
 
     // Suscribirse a cambios de posición del simulador
     unsubscribePositionRef.current = socketService.onSimulatorPosition((data) => {
-      if (data && data.id_vehiculo === parseInt(vehiculoId)) {
+      if (data && data.id_envio === parseInt(envioId)) {
         setTelemetry((prev) => ({
           ...prev,
           ...data,
           timestamp: new Date().toISOString(),
         }));
         addToHistory({
-          id_vehiculo: vehiculoId,
+          id_envio: envioId,
           ...data,
         });
       }
@@ -85,7 +85,7 @@ export function useTelemetry(vehiculoId) {
       if (unsubscribePositionRef.current) unsubscribePositionRef.current();
       if (unsubscribeConnection) unsubscribeConnection();
     };
-  }, [vehiculoId, addToHistory]);
+  }, [envioId, addToHistory]);
 
   const getStatus = useCallback(() => {
     if (!telemetry) return "sin_datos";

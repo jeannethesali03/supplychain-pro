@@ -70,7 +70,6 @@ function App() {
   const [activeStreamKey, setActiveStreamKey] = useState("");
   const [latestTelemetryByEnvio, setLatestTelemetryByEnvio] = useState({});
   const [latestIncidentByEnvio, setLatestIncidentByEnvio] = useState({});
-  const [incidents, setIncidents] = useState([]);
   const [storageStatus, setStorageStatus] = useState({
     percent: 0,
     used_bytes: 0,
@@ -294,26 +293,10 @@ function App() {
     }
   }, [fetchApi, selectedEnvioId]);
 
-  const loadIncidents = useCallback(async () => {
-    try {
-      const incidentsPayload = await fetchApi("/incidentes");
-      const normalized = Array.isArray(incidentsPayload)
-        ? incidentsPayload.map((item) => ({
-          ...item,
-          metadata_json: parseMetadata(item.metadata_json),
-        }))
-        : [];
-      setIncidents(normalized);
-    } catch {
-      setIncidents([]);
-    }
-  }, [fetchApi, parseMetadata]);
-
   useEffect(() => {
     if (!token || !user) return;
     loadCatalogs();
-    loadIncidents();
-  }, [token, user, loadCatalogs, loadIncidents]);
+  }, [token, user, loadCatalogs]);
 
   useEffect(() => {
     if (!selectedEnvioId) return;
@@ -374,17 +357,6 @@ function App() {
         }));
         ensureStreamTab(envioId);
       }
-      setIncidents((prev) => {
-        const exists = prev.some((item) => item.id_incidente === payload.id_incidente);
-        if (exists) return prev;
-        const metadata = parseMetadata(payload.metadata_json);
-        const normalized = {
-          ...payload,
-          metadata_json: metadata,
-          fecha_creacion: payload.fecha_creacion || payload.server_timestamp || new Date().toISOString(),
-        };
-        return [normalized, ...prev].slice(0, 200);
-      });
       pushEvent("incident", payload);
     });
 
@@ -395,10 +367,14 @@ function App() {
     return () => socket.disconnect();
   }, [token, appendStreamEntries, buildStreamEntry, buildTelemetryEntries, ensureStreamTab, parseMetadata, pushEvent]);
 
+  const activeStreamLength = activeStreamKey
+    ? (streams[activeStreamKey]?.length || 0)
+    : 0;
+
   useEffect(() => {
     if (!streamBodyRef.current) return;
     streamBodyRef.current.scrollTop = streamBodyRef.current.scrollHeight;
-  }, [activeStreamKey, streams[activeStreamKey]?.length]);
+  }, [activeStreamKey, activeStreamLength]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -440,7 +416,6 @@ function App() {
     setActiveStreamKey("");
     setLatestTelemetryByEnvio({});
     setLatestIncidentByEnvio({});
-    setIncidents([]);
     setStorageStatus({ percent: 0, used_bytes: 0, max_bytes: 0, updated_at: null, alert_sent: false });
     setExternalAccess({ status: "unknown", checkedAt: null, detail: "" });
     streamCounter.current = 0;
@@ -553,12 +528,6 @@ function App() {
   const activeStreamLabel =
     streamTabs.find((tab) => tab.key === activeStreamKey)?.label || "";
   const selectedEnvioKey = selectedEnvioId ? String(selectedEnvioId) : null;
-
-  const visibleIncidents = useMemo(() => {
-    if (!incidents.length) return [];
-    if (!selectedEnvioId) return incidents;
-    return incidents.filter((item) => String(item.id_envio) === String(selectedEnvioId));
-  }, [incidents, selectedEnvioId]);
 
   const waypoints = useMemo(() => {
     if (!selectedRuta?.waypoints_json) return null;

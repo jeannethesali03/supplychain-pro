@@ -65,9 +65,11 @@ function App() {
   const [selectedRutaId, setSelectedRutaId] = useState("");
   const [tempMin, setTempMin] = useState("");
   const [tempMax, setTempMax] = useState("");
-  const [stream, setStream] = useState([]);
-  const [latestTelemetry, setLatestTelemetry] = useState(null);
-  const [latestIncident, setLatestIncident] = useState(null);
+  const [streams, setStreams] = useState({});
+  const [streamTabs, setStreamTabs] = useState([]);
+  const [activeStreamKey, setActiveStreamKey] = useState("");
+  const [latestTelemetryByEnvio, setLatestTelemetryByEnvio] = useState({});
+  const [latestIncidentByEnvio, setLatestIncidentByEnvio] = useState({});
   const [incidents, setIncidents] = useState([]);
   const [storageStatus, setStorageStatus] = useState({
     percent: 0,
@@ -109,6 +111,20 @@ function App() {
     return { value };
   }, []);
 
+  const enviosById = useMemo(() => {
+    const map = new Map();
+    envios.forEach((envio) => {
+      map.set(String(envio.id_envio), envio);
+    });
+    return map;
+  }, [envios]);
+
+  const getEnvioLabel = useCallback((envioId) => {
+    const envioKey = String(envioId);
+    const envio = enviosById.get(envioKey);
+    return envio?.codigo_rastreo || `Envio ${envioKey}`;
+  }, [enviosById]);
+
   const buildStreamEntry = useCallback((type, payload) => {
     return {
       id: `${Date.now()}-${streamCounter.current++}`,
@@ -118,12 +134,63 @@ function App() {
     };
   }, []);
 
-  const appendStreamEntries = useCallback((entries) => {
-    setStream((prev) => {
-      const merged = [...prev, ...entries];
-      return merged.slice(Math.max(merged.length - STREAM_LIMIT, 0));
+  const ensureStreamTab = useCallback((envioId) => {
+    if (envioId === null || envioId === undefined || envioId === "") return null;
+    const envioKey = String(envioId);
+    const tabKey = `envio-${envioKey}`;
+
+    const label = getEnvioLabel(envioKey);
+
+    setStreamTabs((prev) => {
+      const existing = prev.find((tab) => tab.key === tabKey);
+      if (existing) {
+        if (existing.label === label) return prev;
+        return prev.map((tab) => (tab.key === tabKey ? { ...tab, label } : tab));
+      }
+      return [...prev, { key: tabKey, label, envioId: envioKey }];
     });
-  }, []);
+
+    setStreams((prev) => (prev[tabKey] ? prev : { ...prev, [tabKey]: [] }));
+    setActiveStreamKey((prev) => prev || tabKey);
+    return tabKey;
+  }, [getEnvioLabel]);
+
+  useEffect(() => {
+    setStreamTabs((prev) => {
+      let changed = false;
+      const next = prev.map((tab) => {
+        if (!tab.envioId) return tab;
+        const label = getEnvioLabel(tab.envioId);
+        if (tab.label === label) return tab;
+        changed = true;
+        return { ...tab, label };
+      });
+      return changed ? next : prev;
+    });
+  }, [getEnvioLabel]);
+
+  const appendStreamEntries = useCallback((entries) => {
+    setStreams((prev) => {
+      const next = { ...prev };
+      entries.forEach((entry) => {
+        const envioId =
+          entry?.payload?.envio_id ?? entry?.payload?.value?.id_envio ?? null;
+        const targetKeys = [];
+        if (envioId !== null && envioId !== undefined && envioId !== "") {
+          targetKeys.push(`envio-${String(envioId)}`);
+        } else if (activeStreamKey) {
+          targetKeys.push(activeStreamKey);
+        }
+
+        targetKeys.forEach((key) => {
+          const current = next[key] || [];
+          const merged = [...current, entry];
+          next[key] = merged.slice(Math.max(merged.length - STREAM_LIMIT, 0));
+        });
+      });
+      return next;
+    });
+  }, [activeStreamKey]);
 
   const normalizeStreamPayload = useCallback((type, payload) => {
     const safePayload = payload || {};
@@ -273,6 +340,7 @@ function App() {
     setTempMax(maxValue === null || maxValue === undefined ? "" : String(maxValue));
   }, [envios, selectedEnvioId]);
 
+
   useEffect(() => {
     if (!token) return undefined;
     const socket = io(SOCKET_URL, {
@@ -284,14 +352,28 @@ function App() {
     });
 
     socket.on("telemetry:new", (payload) => {
-      setLatestTelemetry(payload);
+      const envioId = payload?.id_envio ?? null;
+      if (envioId !== null && envioId !== undefined) {
+        setLatestTelemetryByEnvio((prev) => ({
+          ...prev,
+          [String(envioId)]: payload,
+        }));
+        ensureStreamTab(envioId);
+      }
       const entries = buildTelemetryEntries(payload)
         .map((entry) => buildStreamEntry("telemetry", entry));
       appendStreamEntries(entries);
     });
 
     socket.on("incident:new", (payload) => {
-      setLatestIncident(payload);
+      const envioId = payload?.id_envio ?? null;
+      if (envioId !== null && envioId !== undefined) {
+        setLatestIncidentByEnvio((prev) => ({
+          ...prev,
+          [String(envioId)]: payload,
+        }));
+        ensureStreamTab(envioId);
+      }
       setIncidents((prev) => {
         const exists = prev.some((item) => item.id_incidente === payload.id_incidente);
         if (exists) return prev;
@@ -311,12 +393,12 @@ function App() {
     });
 
     return () => socket.disconnect();
-  }, [token, appendStreamEntries, buildStreamEntry, buildTelemetryEntries, parseMetadata, pushEvent]);
+  }, [token, appendStreamEntries, buildStreamEntry, buildTelemetryEntries, ensureStreamTab, parseMetadata, pushEvent]);
 
   useEffect(() => {
     if (!streamBodyRef.current) return;
     streamBodyRef.current.scrollTop = streamBodyRef.current.scrollHeight;
-  }, [stream]);
+  }, [activeStreamKey, streams[activeStreamKey]?.length]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -353,9 +435,11 @@ function App() {
     setUser(null);
     localStorage.removeItem("token");
     localStorage.removeItem("supplychain-user");
-    setStream([]);
-    setLatestTelemetry(null);
-    setLatestIncident(null);
+    setStreams({});
+    setStreamTabs([]);
+    setActiveStreamKey("");
+    setLatestTelemetryByEnvio({});
+    setLatestIncidentByEnvio({});
     setIncidents([]);
     setStorageStatus({ percent: 0, used_bytes: 0, max_bytes: 0, updated_at: null, alert_sent: false });
     setExternalAccess({ status: "unknown", checkedAt: null, detail: "" });
@@ -465,6 +549,11 @@ function App() {
     (item) => String(item.id_ruta) === String(selectedRutaId),
   );
 
+  const activeStream = activeStreamKey ? streams[activeStreamKey] || [] : [];
+  const activeStreamLabel =
+    streamTabs.find((tab) => tab.key === activeStreamKey)?.label || "";
+  const selectedEnvioKey = selectedEnvioId ? String(selectedEnvioId) : null;
+
   const visibleIncidents = useMemo(() => {
     if (!incidents.length) return [];
     if (!selectedEnvioId) return incidents;
@@ -523,6 +612,12 @@ function App() {
         message: "Viaje iniciado",
         id_envio: selectedEnvio.id_envio,
       });
+      if (selectedEnvio?.id_envio !== undefined && selectedEnvio?.id_envio !== null) {
+        const tabKey = ensureStreamTab(selectedEnvio.id_envio);
+        if (tabKey) {
+          setActiveStreamKey(tabKey);
+        }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -672,6 +767,10 @@ function App() {
 
   const triggerIncident = async (path, label) => {
     if (!selectedEnvio) return;
+    if (!journeyProgress || journeyProgress.estado !== "EN_PROGRESO") {
+      setError("Selecciona un envio en transito para inyectar incidentes");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -726,7 +825,12 @@ function App() {
     </div>
   );
 
-  const telemetryStatus = latestTelemetry || {};
+  const telemetryStatus = selectedEnvioKey
+    ? latestTelemetryByEnvio[selectedEnvioKey]
+    : null;
+  const latestIncident = selectedEnvioKey
+    ? latestIncidentByEnvio[selectedEnvioKey]
+    : null;
 
   const buildTelemetryLines = (payload) => {
     const sensor = payload?.sensor || "telemetria";
@@ -1041,7 +1145,7 @@ function App() {
                   <button
                     className="danger-button"
                     type="button"
-                    disabled={loading || !isAdmin}
+                    disabled={loading || !isAdmin || !journeyProgress || journeyProgress.estado !== "EN_PROGRESO"}
                     onClick={() =>
                       triggerIncident(
                         "temperatura-alta",
@@ -1054,7 +1158,7 @@ function App() {
                   <button
                     className="danger-button alt"
                     type="button"
-                    disabled={loading || !isAdmin}
+                    disabled={loading || !isAdmin || !journeyProgress || journeyProgress.estado !== "EN_PROGRESO"}
                     onClick={() =>
                       triggerIncident(
                         "geofence-violation",
@@ -1067,7 +1171,7 @@ function App() {
                   <button
                     className="danger-button soft"
                     type="button"
-                    disabled={loading || !isAdmin}
+                    disabled={loading || !isAdmin || !journeyProgress || journeyProgress.estado !== "EN_PROGRESO"}
                     onClick={() =>
                       triggerIncident("bateria-baja", "Bateria baja (5%)")
                     }
@@ -1077,7 +1181,7 @@ function App() {
                   <button
                     className="danger-button soft"
                     type="button"
-                    disabled={loading || !isAdmin}
+                    disabled={loading || !isAdmin || !journeyProgress || journeyProgress.estado !== "EN_PROGRESO"}
                     onClick={() =>
                       triggerIncident("volumen-lleno", "STORAGE_FULL (100%)")
                     }
@@ -1093,6 +1197,11 @@ function App() {
                     {checkingExternal ? "Verificando..." : "Simular DDoS"}
                   </button>
                 </div>
+                {journeyProgress?.estado !== "EN_PROGRESO" ? (
+                  <div className="info-banner">
+                    Selecciona un envio en transito para aplicar incidentes.
+                  </div>
+                ) : null}
               </div>
 
               <div className="panel-card status-card">
@@ -1100,23 +1209,23 @@ function App() {
                 <div className="status-grid">
                   <div>
                     <span>Temperatura</span>
-                    <strong>{telemetryStatus.temperatura ?? "--"} C</strong>
+                    <strong>{telemetryStatus?.temperatura ?? "--"} C</strong>
                   </div>
                   <div>
                     <span>Humedad</span>
-                    <strong>{telemetryStatus.humedad ?? "--"} %</strong>
+                    <strong>{telemetryStatus?.humedad ?? "--"} %</strong>
                   </div>
                   <div>
                     <span>Bateria</span>
                     <strong>
-                      {telemetryStatus.porcentaje_bateria ?? "--"} %
+                      {telemetryStatus?.porcentaje_bateria ?? "--"} %
                     </strong>
                   </div>
                   <div>
                     <span>Ubicacion</span>
                     <strong>
-                      {telemetryStatus.latitud !== undefined &&
-                      telemetryStatus.longitud !== undefined
+                      {telemetryStatus?.latitud !== undefined &&
+                      telemetryStatus?.longitud !== undefined
                         ? `${telemetryStatus.latitud}, ${telemetryStatus.longitud}`
                         : "--"}
                     </strong>
@@ -1126,7 +1235,7 @@ function App() {
                   <div>
                     <span>Ultima telemetria</span>
                     <strong>
-                      {formatClock(telemetryStatus.marca_tiempo_dispositivo)}
+                      {formatClock(telemetryStatus?.marca_tiempo_dispositivo)}
                     </strong>
                   </div>
                   <div>
@@ -1195,37 +1304,6 @@ function App() {
                 ) : null}
               </div>
 
-              <div className="panel-card incidents-list-card">
-                <div className="card-title">Panel de incidencias</div>
-                <div className="incidents-body">
-                  {visibleIncidents.length ? (
-                    visibleIncidents.map((incident) => {
-                      const meta = incident.metadata_json || {};
-                      const lat = meta.latitud ?? meta.lat ?? null;
-                      const lng = meta.longitud ?? meta.lng ?? null;
-                      return (
-                        <div key={incident.id_incidente || `${incident.id_envio}-${incident.fecha_creacion}`} className="incident-line">
-                          <div className="incident-head">
-                            <span className="incident-type">{incident.tipo_incidente}</span>
-                            <span>{formatClock(incident.fecha_creacion || incident.server_timestamp)}</span>
-                          </div>
-                          <div className="incident-meta">
-                            <span>Envio {incident.id_envio}</span>
-                            {lat !== null && lng !== null ? (
-                              <span>{lat}, {lng}</span>
-                            ) : (
-                              <span>Sin coordenadas</span>
-                            )}
-                          </div>
-                          <p className="incident-desc">{incident.descripcion || "Incidente registrado"}</p>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="stream-empty">Sin incidencias registradas</div>
-                  )}
-                </div>
-              </div>
             </div>
 
             <div className="stream-panel">
@@ -1238,14 +1316,46 @@ function App() {
                   <button
                     className="ghost-button"
                     type="button"
-                    onClick={() => setStream([])}
+                    disabled={!activeStreamKey}
+                    onClick={() => {
+                      setStreams((prev) => {
+                        if (!activeStreamKey) return prev;
+                        return { ...prev, [activeStreamKey]: [] };
+                      });
+                    }}
                   >
                     Limpiar
                   </button>
                 </div>
+                {streamTabs.length ? (
+                  <div className="stream-tabs">
+                    {streamTabs.map((tab) => {
+                      const isActive = tab.key === activeStreamKey;
+                      const count = streams[tab.key]?.length || 0;
+                      return (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          className={`stream-tab ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            setActiveStreamKey(tab.key);
+                            if (tab.envioId) {
+                              setSelectedEnvioId(String(tab.envioId));
+                            }
+                          }}
+                        >
+                          {tab.label}
+                          <span className="stream-tab-count">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="stream-empty">Inicia un recorrido para ver el stream.</div>
+                )}
                 <div className="stream-body" ref={streamBodyRef}>
-                  {stream.length ? (
-                    stream.map((entry) => {
+                  {activeStream.length ? (
+                    activeStream.map((entry) => {
                       const isTelemetry = entry.type === "telemetry";
                       const payloadText = isTelemetry
                         ? buildTelemetryLines(entry.payload)
@@ -1268,7 +1378,9 @@ function App() {
                     })
                   ) : (
                     <div className="stream-empty">
-                      Esperando eventos del simulador...
+                      {activeStreamKey
+                        ? `Esperando eventos del simulador${activeStreamLabel ? ` (${activeStreamLabel})` : ""}...`
+                        : "Selecciona un viaje para ver el stream."}
                     </div>
                   )}
                 </div>

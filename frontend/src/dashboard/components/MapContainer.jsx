@@ -339,6 +339,7 @@ const MAP_STYLES = `
     background: linear-gradient(to bottom, #1e293b, #0f172a);
     border-top: 1px solid #1e293b;
     font-size: 0.8rem;
+    color: #f8fafc;
   }
 
   .info-item {
@@ -352,7 +353,7 @@ const MAP_STYLES = `
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    color: #94a3b8;
+    color: #f8fafc;
   }
 
   .info-item span {
@@ -813,7 +814,6 @@ function EnvioCard({ envio, isSelected, onSelect }) {
 
   const temp      = toNumber(telemetry?.temperatura);
   const humedad   = toNumber(telemetry?.humedad);
-  const velocidad = toNumber(telemetry?.velocidad);
   const lat       = toNumber(telemetry?.latitud);
   const lng       = toNumber(telemetry?.longitud);
 
@@ -881,8 +881,6 @@ function EnvioCard({ envio, isSelected, onSelect }) {
 
       {/* Footer con información adicional */}
       <div className="envio-card__footer">
-        {velocidad !== null && `${velocidad.toFixed(0)} km/h`}
-        {velocidad !== null && " · "}
         {envio?.estado === "ENTREGADO"
           ? "Entregado"
           : envio?.estado === "CANCELADO"
@@ -912,6 +910,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
 
   const envioId = selectedEnvio?.id_envio;
   const { telemetry } = useTelemetry(envioId);
+  const statusTextColor = selectedForMap?.estado === "ENTREGADO" ? "#86efac" : "#f8fafc";
 
   // Inyectar estilos al montar
   useEffect(() => { injectStyles(); }, []);
@@ -1560,13 +1559,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
           <div className="info-item">
             <strong>Estado:</strong>{" "}
             <span style={{
-              color: selectedForMap.estado === "ENTREGADO"
-                ? "#10b981"
-                : selectedForMap.estado === "INCIDENTE_REPORTADO"
-                  ? "#ef4444"
-                  : selectedForMap.estado === "CANCELADO"
-                    ? "#64748b"
-                    : "#3b82f6",
+              color: statusTextColor,
               fontWeight: "bold"
             }}>
               {selectedForMap.estado === "ENTREGADO"
@@ -1585,9 +1578,6 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
               </div>
               <div className="info-item">
                 <strong>Humedad:</strong> {toNumber(telemetry.humedad)?.toFixed(1)}%
-              </div>
-              <div className="info-item">
-                <strong>Velocidad:</strong> {toNumber(telemetry.velocidad)?.toFixed(1)} km/h
               </div>
             </>
           )}

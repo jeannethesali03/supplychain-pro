@@ -455,6 +455,47 @@
   font-size: 0.85rem;
 }
 
+.stream-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stream-tab {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.stream-tab:hover {
+  background: #eef2f7;
+}
+
+.stream-tab.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #f8fafc;
+}
+
+.stream-tab-count {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: inherit;
+  font-size: 0.7rem;
+}
+
+.stream-tab.active .stream-tab-count {
+  background: rgba(248, 250, 252, 0.2);
+}
+
 .stream-body {
   flex: 1;
   background: #101011;

@@ -13,22 +13,99 @@ import MapContainer from "./MapContainer";
 import IncidentesView from "./IncidentesView";
 import MonitoreoView from "./MonitoreoView";
 import HistorialView from "./HistorialView";
-import ConfiguracionView from "./ConfiguracionView";
+import EstadísticasView from "./ConfiguracionView";
 import Footer from "./Footer";
 import TelemetryPanel from "./TelemetryPanel";
 import apiService from "../services/apiService";
 import { useEnvios } from "../hooks/useEnvios.js";
+import { useIncidents } from "../hooks/useIncidents.js";
+import { useTheme } from "../hooks/useTheme.js";
 
 export default function DashboardLayout({ user, onLogout }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState("dashboard");
   const [selectedEnvio, setSelectedEnvio] = useState(null);
+  const [selectedIncident, setSelectedIncident] = useState(null);
   const [rupturas, setRupturas] = useState([]);
+  const [mapHighlight, setMapHighlight] = useState(null);
   const { envios } = useEnvios();
+  const { incidents } = useIncidents();
+  const themeContext = useTheme();
 
   const currentSelectedEnvio = selectedEnvio
     ? envios.find((e) => String(e.id_envio) === String(selectedEnvio.id_envio)) || selectedEnvio
     : null;
+
+  const handleSelectEnvio = useCallback((envio) => {
+    setSelectedEnvio(envio);
+    if (selectedIncident && String(selectedIncident.id_envio) !== String(envio?.id_envio)) {
+      setSelectedIncident(null);
+    }
+  }, [selectedIncident]);
+
+  const handleSelectIncident = useCallback((incident) => {
+    const incidentEnvio = envios.find((e) => String(e.id_envio) === String(incident.id_envio));
+    if (incidentEnvio) {
+      setSelectedEnvio(incidentEnvio);
+    }
+    setSelectedIncident(incident);
+    setActiveView("dashboard");
+  }, [envios]);
+
+  const handleNavigateToMap = (data) => {
+    if (!data) return;
+    if (data.type === "incident" && data.incident) {
+      handleSelectIncident(data.incident);
+    } else if (data.type === "vehiculo") {
+      // Buscar el primer incidente de este vehículo
+      const matchingIncident = incidents.find(
+        (inc) => String(inc.id_vehiculo) === String(data.data?.id_vehiculo || data.id_vehiculo)
+      );
+      if (matchingIncident) {
+        handleSelectIncident(matchingIncident);
+      } else {
+        const matchingEnvio = envios.find(
+          (e) => String(e.id_vehiculo) === String(data.data?.id_vehiculo || data.id_vehiculo)
+        );
+        if (matchingEnvio) {
+          handleSelectEnvio(matchingEnvio);
+          setActiveView("dashboard");
+        } else {
+          setActiveView("dashboard");
+        }
+      }
+    } else if (data.type === "ruta") {
+      // Buscar el primer incidente de esta ruta
+      const routeName = data.data?.ruta || data.ruta;
+      const matchingIncident = incidents.find(
+        (inc) => String(inc.nombre_ruta || inc.ruta) === String(routeName)
+      );
+      if (matchingIncident) {
+        handleSelectIncident(matchingIncident);
+      } else {
+        const matchingEnvio = envios.find(
+          (e) => String(e.nombre_ruta || e.ruta) === String(routeName)
+        );
+        if (matchingEnvio) {
+          handleSelectEnvio(matchingEnvio);
+          setActiveView("dashboard");
+        } else {
+          setActiveView("dashboard");
+        }
+      }
+    } else {
+      setMapHighlight(data);
+      setActiveView("dashboard");
+    }
+  };
+
+  // Función para navegar al panel de incidentes
+  const navigateToIncidentsPanel = (incident) => {
+    if (incident) {
+      setSelectedIncident(incident);
+    }
+    setActiveView("incidentes");
+  };
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
@@ -68,11 +145,19 @@ export default function DashboardLayout({ user, onLogout }) {
           <div className="dashboard-main">
             <MapContainer
               selectedEnvio={currentSelectedEnvio}
-              onSelectEnvio={setSelectedEnvio}
+              selectedIncident={selectedIncident}
+              incidents={incidents}
+              onSelectEnvio={handleSelectEnvio}
+              onSelectIncident={handleSelectIncident}
               rupturas={rupturas}
               envios={envios}
             />
-            <TelemetryPanel selectedEnvio={currentSelectedEnvio} rupturas={rupturas} />
+            <TelemetryPanel
+              selectedEnvio={currentSelectedEnvio}
+              selectedIncident={selectedIncident}
+              rupturas={rupturas}
+              onViewIncidents={navigateToIncidentsPanel}
+            />
           </div>
         );
 
@@ -86,7 +171,10 @@ export default function DashboardLayout({ user, onLogout }) {
       case "incidentes":
         return (
           <div className="dashboard-main">
-            <IncidentesView />
+            <IncidentesView
+              onShowIncident={handleSelectIncident}
+              selectedIncident={selectedIncident}
+            />
           </div>
         );
 
@@ -100,7 +188,10 @@ export default function DashboardLayout({ user, onLogout }) {
       case "configuracion":
         return (
           <div className="dashboard-main">
-            <ConfiguracionView />
+            <EstadísticasView
+              themeContext={themeContext}
+              onNavigateToMap={handleNavigateToMap}
+            />
           </div>
         );
 

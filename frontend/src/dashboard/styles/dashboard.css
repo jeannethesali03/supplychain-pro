@@ -53,6 +53,41 @@
   --spacing-3xl: 32px;
 }
 
+/* ===== DARK MODE ===== */
+[data-theme="dark"] {
+  /* Color Palette - Dark Mode */
+  --color-primary: #60a5fa;
+  --color-primary-light: #1e3a8a;
+  --color-primary-dark: #93c5fd;
+  --color-success: #34d399;
+  --color-success-light: #064e3b;
+  --color-warning: #fbbf24;
+  --color-warning-light: #78350f;
+  --color-danger: #f87171;
+  --color-danger-light: #7f1d1d;
+  
+  /* Neutral Colors - Dark */
+  --color-bg: #1e293b;
+  --color-bg-secondary: #0f172a;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #94a3b8;
+  --color-border: #334155;
+  --color-border-light: #475569;
+  
+  /* Gray Scale - Dark */
+  --color-gray-light: #334155;
+  --color-gray: #475569;
+  --color-gray-dark: #94a3b8;
+  
+  /* Shadows - Dark Mode */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -100,6 +135,11 @@ html, body {
   gap: var(--spacing-lg);
   width: 100%;
   max-width: 100%;
+}
+
+.dashboard-main > *:first-child {
+  height: calc(100vh - 130px);
+  flex-shrink: 0;
 }
 
 /* ===== Scrollbar Personalizado ===== */

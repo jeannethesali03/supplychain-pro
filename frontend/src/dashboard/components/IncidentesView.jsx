@@ -4,10 +4,10 @@
 
 import IncidentsPanel from "./IncidentsPanel.jsx";
 
-export default function IncidentesView() {
+export default function IncidentesView({ onShowIncident, selectedIncident }) {
   return (
     <div className="control-panel">
-      <IncidentsPanel />
+      <IncidentsPanel onShowIncident={onShowIncident} selectedIncident={selectedIncident} />
     </div>
   );
 }

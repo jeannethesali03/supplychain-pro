@@ -167,6 +167,58 @@ class ApiService {
   async stopSimulator() {
     return this.request("/simulator/stop", { method: "POST" });
   }
+
+  // ====== Estadísticas ======
+  async getEstadisticasVehiculos(startDate, endDate) {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const query = params.toString();
+    return this.request(`/estadisticas/vehiculos${query ? `?${query}` : ""}`);
+  }
+
+  async getEstadisticasRutas(startDate, endDate) {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const query = params.toString();
+    return this.request(`/estadisticas/rutas${query ? `?${query}` : ""}`);
+  }
+
+  async getEstadisticasTipos(startDate, endDate) {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const query = params.toString();
+    return this.request(`/estadisticas/tipos${query ? `?${query}` : ""}`);
+  }
+
+  async getEstadisticasUbicaciones(startDate, endDate) {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const query = params.toString();
+    return this.request(`/estadisticas/ubicaciones${query ? `?${query}` : ""}`);
+  }
+
+  async getIncidentesFiltrados(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.vehiculoId) params.append("vehiculoId", filters.vehiculoId);
+    if (filters.rutaId) params.append("rutaId", filters.rutaId);
+    if (filters.envioId) params.append("envioId", filters.envioId);
+    if (filters.startDate) params.append("startDate", filters.startDate);
+    if (filters.endDate) params.append("endDate", filters.endDate);
+    const query = params.toString();
+    return this.request(`/estadisticas/incidentes${query ? `?${query}` : ""}`);
+  }
+
+  async getEstadisticasResumen(startDate, endDate) {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const query = params.toString();
+    return this.request(`/estadisticas/resumen${query ? `?${query}` : ""}`);
+  }
 }
 
 export default new ApiService();

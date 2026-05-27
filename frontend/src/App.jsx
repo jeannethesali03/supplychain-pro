@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { Link } from "react-router-dom";
+import { getIncidentTypeLabel } from "./dashboard/utils/formatters.js";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5001/api";
@@ -1209,7 +1210,7 @@ function App() {
                   </div>
                   <div>
                     <span>Ultimo incidente</span>
-                    <strong>{latestIncident?.tipo_incidente || "--"}</strong>
+                    <strong>{latestIncident ? getIncidentTypeLabel(latestIncident.tipo_incidente) : "--"}</strong>
                   </div>
                 </div>
                 <div className="status-footer">

@@ -1,10 +1,52 @@
 const db = require('../config/db');
 const { emitEvent } = require('../socket');
 
-// Listar incidentes recientes
+// Listar incidentes recientes con detalles de telemetría y envío
 exports.listIncidentes = async (req, res, next) => {
   try {
-    const [rows] = await db.query('SELECT * FROM incidentes ORDER BY fecha_creacion DESC LIMIT 200');
+    const query = `
+      SELECT 
+        i.id_incidente,
+        i.id_envio,
+        i.id_registro_telemetria,
+        i.tipo_incidente,
+        i.valor_registrado,
+        i.valor_limite,
+        i.descripcion,
+        i.origen_evento,
+        i.metadata_json,
+        i.fecha_creacion as fecha_incidente,
+        e.codigo_rastreo,
+        e.origen,
+        e.destino,
+        e.temp_min_permitida,
+        e.temp_max_permitida,
+        e.estado as estado_envio,
+        ev.id_vehiculo,
+        ev.placa AS vehiculo_placa,
+        rt.latitud,
+        rt.longitud,
+        rt.temperatura as temp_registrada,
+        rt.humedad,
+        rt.porcentaje_bateria,
+        rt.marca_tiempo_dispositivo
+      FROM incidentes i
+      LEFT JOIN envios e ON i.id_envio = e.id_envio
+      LEFT JOIN (
+        SELECT ev1.id_envio, ev1.id_vehiculo, v.placa
+        FROM envios_vehiculos ev1
+        JOIN (
+          SELECT id_envio, MAX(fecha_asignacion) AS fecha_asignacion
+          FROM envios_vehiculos
+          GROUP BY id_envio
+        ) latest ON ev1.id_envio = latest.id_envio AND ev1.fecha_asignacion = latest.fecha_asignacion
+        JOIN vehiculos v ON ev1.id_vehiculo = v.id_vehiculo
+      ) ev ON ev.id_envio = e.id_envio
+      LEFT JOIN registros_telemetria rt ON i.id_registro_telemetria = rt.id_registro_telemetria
+      ORDER BY i.fecha_creacion DESC 
+      LIMIT 200
+    `;
+    const [rows] = await db.query(query);
     res.json(rows);
   } catch (err) {
     next(err);
@@ -58,7 +100,48 @@ exports.createIncidente = async (req, res, next) => {
 exports.getIncidente = async (req, res, next) => {
   try {
     const id = req.params.id;
-    const [rows] = await db.query('SELECT * FROM incidentes WHERE id_incidente = ?', [id]);
+    const query = `
+      SELECT 
+        i.id_incidente,
+        i.id_envio,
+        i.id_registro_telemetria,
+        i.tipo_incidente,
+        i.valor_registrado,
+        i.valor_limite,
+        i.descripcion,
+        i.origen_evento,
+        i.metadata_json,
+        i.fecha_creacion as fecha_incidente,
+        e.codigo_rastreo,
+        e.origen,
+        e.destino,
+        e.temp_min_permitida,
+        e.temp_max_permitida,
+        e.estado as estado_envio,
+        ev.id_vehiculo,
+        ev.placa AS vehiculo_placa,
+        rt.latitud,
+        rt.longitud,
+        rt.temperatura as temp_registrada,
+        rt.humedad,
+        rt.porcentaje_bateria,
+        rt.marca_tiempo_dispositivo
+      FROM incidentes i
+      LEFT JOIN envios e ON i.id_envio = e.id_envio
+      LEFT JOIN (
+        SELECT ev1.id_envio, ev1.id_vehiculo, v.placa
+        FROM envios_vehiculos ev1
+        JOIN (
+          SELECT id_envio, MAX(fecha_asignacion) AS fecha_asignacion
+          FROM envios_vehiculos
+          GROUP BY id_envio
+        ) latest ON ev1.id_envio = latest.id_envio AND ev1.fecha_asignacion = latest.fecha_asignacion
+        JOIN vehiculos v ON ev1.id_vehiculo = v.id_vehiculo
+      ) ev ON ev.id_envio = e.id_envio
+      LEFT JOIN registros_telemetria rt ON i.id_registro_telemetria = rt.id_registro_telemetria
+      WHERE i.id_incidente = ?
+    `;
+    const [rows] = await db.query(query, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Incidente no encontrado' });
     res.json(rows[0]);
   } catch (err) {

@@ -8,6 +8,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTelemetry } from "../hooks/useTelemetry.js";
 import apiService from "../services/apiService.js";
+import socketService from "../services/socketService.js";
+import { getIncidentTypeLabel } from "../utils/formatters.js";
 
 // ── CSS embebido - Professional SaaS Design & MapCN Overrides ──────────────────
 const MAP_STYLES = `
@@ -97,12 +99,13 @@ const MAP_STYLES = `
   .map-canvas-wrapper {
     position: relative;
     width: 100%;
-    flex-shrink: 0;
+    flex: 1;
+    min-height: 300px;
   }
 
   .leaflet-map-div {
     width: 100%;
-    height: 320px;
+    height: 100%;
     z-index: 0;
   }
 
@@ -170,9 +173,10 @@ const MAP_STYLES = `
   }
 
   .envio-card--selected {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 2.5px solid #3b82f6 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -2px rgba(59, 130, 246, 0.1) !important;
+    background: linear-gradient(135deg, #f0f7ff 0%, #e0f2fe 100%) !important;
   }
 
   .envio-card--critical {
@@ -186,8 +190,10 @@ const MAP_STYLES = `
   }
 
   .envio-card--critical.envio-card--selected {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    border: 2.5px solid #ef4444 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.2), 0 4px 6px -2px rgba(239, 68, 68, 0.1) !important;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe4e6 100%) !important;
   }
 
   .envio-card__header {
@@ -372,6 +378,59 @@ const MAP_STYLES = `
 
   .custom-marker:hover {
     transform: scale(1.2);
+  }
+
+  .marker-incident {
+    width: 16px;
+    height: 16px;
+    background: #dc2626;
+    border: 3px solid rgba(255,255,255,0.95);
+    border-radius: 50%;
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.18);
+  }
+
+  .marker-incident--selected {
+    width: 24px;
+    height: 24px;
+    background: #f43f5e;
+    border: 3px solid #ffffff;
+    box-shadow: 0 0 0 8px rgba(244, 63, 94, 0.35);
+    animation: pulse-incident 1.8s infinite ease-out;
+  }
+
+  @keyframes pulse-incident {
+    0% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.2); opacity: 0.65; }
+    100% { transform: scale(1); opacity: 0.9; }
+  }
+
+  .marker-ruptura-wrapper {
+    position: relative;
+    width: 18px;
+    height: 18px;
+  }
+
+  .marker-ruptura {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #f59e0b;
+    border: 2px solid #b45309;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.28);
+  }
+
+  .marker-ruptura-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.35);
+    animation: pulse-warning 1.8s infinite ease-out;
+  }
+
+  @keyframes pulse-warning {
+    0% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.25); opacity: 0.6; }
+    100% { transform: scale(1); opacity: 0.9; }
   }
 
   .marker-origen {
@@ -826,7 +885,7 @@ function EnvioCard({ envio, isSelected, onSelect }) {
   if (isCritical)  cardClass += " envio-card--critical";
 
   return (
-    <div className={cardClass} onClick={() => onSelect(envio)}>
+    <div id={`envio-card-${envio.id_envio}`} className={cardClass} onClick={() => onSelect(envio)}>
       {/* Encabezado con título e indicador de incidencia */}
       <div className="envio-card__header">
         <div className="envio-card__title-group">
@@ -893,8 +952,15 @@ function EnvioCard({ envio, isSelected, onSelect }) {
   );
 }
 
+// Helper para validar si un envío está activo/en camino
+const isEnCamino = (envio) => {
+  if (!envio) return false;
+  const est = (envio.estado || "").toUpperCase();
+  return est !== "ENTREGADO" && est !== "CANCELADO";
+};
+
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = [], envios = [] }) {
+export default function MapContainer({ selectedEnvio, selectedIncident, incidents = [], onSelectEnvio, onSelectIncident, rupturas = [], envios = [] }) {
   const mapDivRef = useRef(null);
   const mapRef    = useRef(null);
   const markersRef = useRef([]);
@@ -903,14 +969,122 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
   const [zoom, setZoom]               = useState(1);
   const selectedForMap = selectedEnvio;
   const [mapReady, setMapReady]       = useState(false);
+
+  // Efecto para hacer scroll horizontal suave hasta la tarjeta del envío seleccionado
+  useEffect(() => {
+    if (selectedEnvio?.id_envio) {
+      const timer = setTimeout(() => {
+        const cardElement = document.getElementById(`envio-card-${selectedEnvio.id_envio}`);
+        if (cardElement) {
+          cardElement.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+            inline: "center"
+          });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedEnvio]);
   const [mapLoaded, setMapLoaded]     = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [rutas, setRutas]             = useState([]);
   const [roadRoutes, setRoadRoutes]   = useState({});
+  const [allTelemetry, setAllTelemetry] = useState({});
+
+  // Estados para filtros e información de vehículos
+  const [vehiculos, setVehiculos] = useState([]);
+  const [enviosVehiculos, setEnviosVehiculos] = useState([]);
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterVehicle, setFilterVehicle] = useState("");
+  const [filterRoute, setFilterRoute] = useState("");
+  const [filterIncident, setFilterIncident] = useState("");
+
+  // Cargar catálogo de vehículos y asignaciones al montar
+  useEffect(() => {
+    async function loadVehiculosYAsignaciones() {
+      try {
+        const [resVehiculos, resAsignaciones] = await Promise.all([
+          apiService.getVehiculos(),
+          apiService.getEnviosVehiculos()
+        ]);
+        if (resVehiculos.success && Array.isArray(resVehiculos.data)) {
+          setVehiculos(resVehiculos.data);
+        }
+        if (resAsignaciones.success && Array.isArray(resAsignaciones.data)) {
+          setEnviosVehiculos(resAsignaciones.data);
+        }
+      } catch (err) {
+        console.error("Error loading vehicles and assignments in MapContainer:", err);
+      }
+    }
+    loadVehiculosYAsignaciones();
+  }, []);
+
+  const handleClearFilters = () => {
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setFilterVehicle("");
+    setFilterRoute("");
+    setFilterIncident("");
+  };
 
   const envioId = selectedEnvio?.id_envio;
   const { telemetry } = useTelemetry(envioId);
   const statusTextColor = selectedForMap?.estado === "ENTREGADO" ? "#86efac" : "#f8fafc";
+
+  // Cargar telemetría inicial para todos los envíos en camino
+  useEffect(() => {
+    async function loadTelemetryForActiveEnvios() {
+      const activeEnvios = envios.filter(isEnCamino);
+      for (const e of activeEnvios) {
+        if (!allTelemetry[e.id_envio]) {
+          try {
+            const res = await apiService.getUltimaTelemetria(e.id_envio);
+            if (res.success && res.data) {
+              setAllTelemetry(prev => ({
+                ...prev,
+                [e.id_envio]: res.data
+              }));
+            }
+          } catch (err) {
+            console.error("Error loading telemetry for envio:", e.id_envio, err);
+          }
+        }
+      }
+    }
+    if (envios.length > 0) {
+      loadTelemetryForActiveEnvios();
+    }
+  }, [envios]);
+
+  // Suscribirse a telemetría en tiempo real de todos los envíos
+  useEffect(() => {
+    const unsubscribeTelemetry = socketService.onTelemetryUpdate((data) => {
+      if (data) {
+        setAllTelemetry(prev => ({ ...prev, [data.id_envio]: data }));
+      }
+    });
+
+    const unsubscribePosition = socketService.onSimulatorPosition((data) => {
+      if (data) {
+        setAllTelemetry(prev => ({
+          ...prev,
+          [data.id_envio]: {
+            ...prev[data.id_envio],
+            ...data,
+            timestamp: new Date().toISOString()
+          }
+        }));
+      }
+    });
+
+    return () => {
+      if (unsubscribeTelemetry) unsubscribeTelemetry();
+      if (unsubscribePosition) unsubscribePosition();
+    };
+  }, []);
 
   // Inyectar estilos al montar
   useEffect(() => { injectStyles(); }, []);
@@ -1094,6 +1268,76 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
     };
   }, []);
 
+  // Filtramos los envíos por el término de búsqueda y filtros estáticos
+  const filteredEnvios = envios.filter((envio) => {
+    // 1. Búsqueda de texto
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = 
+      String(envio.id_envio || "").includes(searchLower) ||
+      (envio.codigo_rastreo && envio.codigo_rastreo.toLowerCase().includes(searchLower)) ||
+      (envio.tipo_mercancia && envio.tipo_mercancia.toLowerCase().includes(searchLower)) ||
+      (envio.origen && envio.origen.toLowerCase().includes(searchLower)) ||
+      (envio.destino && envio.destino.toLowerCase().includes(searchLower));
+      
+    if (!matchesSearch) return false;
+
+    // 2. Filtro Fecha Desde
+    if (filterStartDate) {
+      const envDate = new Date(envio.fecha_creacion);
+      const start = new Date(filterStartDate + "T00:00:00");
+      if (envDate < start) return false;
+    }
+
+    // 3. Filtro Fecha Hasta
+    if (filterEndDate) {
+      const envDate = new Date(envio.fecha_creacion);
+      const end = new Date(filterEndDate + "T23:59:59");
+      if (envDate > end) return false;
+    }
+
+    // 4. Filtro Camión / Vehículo
+    if (filterVehicle) {
+      const asignacion = enviosVehiculos.find(ev => ev.id_envio === envio.id_envio);
+      if (!asignacion || String(asignacion.id_vehiculo) !== String(filterVehicle)) {
+        return false;
+      }
+    }
+
+    // 5. Filtro Ruta
+    if (filterRoute) {
+      if (String(envio.id_ruta) !== String(filterRoute)) {
+        return false;
+      }
+    }
+
+    // 6. Filtro Incidente
+    if (filterIncident) {
+      const envIncidents = incidents.filter(inc => String(inc.id_envio) === String(envio.id_envio));
+      if (filterIncident === "con_incidente") {
+        if (envIncidents.length === 0) return false;
+      } else if (filterIncident === "sin_incidente") {
+        if (envIncidents.length > 0) return false;
+      } else {
+        const hasSpecificType = envIncidents.some(inc => {
+          const typeUpper = (inc.tipo_incidente || inc.tipo || "").toString().toUpperCase();
+          if (filterIncident === "ruptura_frio") {
+            return typeUpper === "RUPTURA_CADENA_FRIO" || typeUpper === "TEMPERATURA_CRITICA" || typeUpper === "HUMEDAD_CRITICA";
+          }
+          if (filterIncident === "bateria_baja") {
+            return typeUpper === "BATERIA_BAJA";
+          }
+          if (filterIncident === "desvio_ruta") {
+            return typeUpper === "OUT_OF_BOUNDS" || typeUpper === "GEOFENCE_VIOLATION" || typeUpper === "VIOLACION_GEOFENCE";
+          }
+          return false;
+        });
+        if (!hasSpecificType) return false;
+      }
+    }
+
+    return true;
+  });
+
   // ── Dibujar rutas (nativos GeoJSON layers) y marcadores interactivos (DOM) ────
   useEffect(() => {
     if (!mapReady || !mapLoaded || !mapRef.current) return;
@@ -1101,11 +1345,19 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
 
     // ── 1. Dibujar rutas como polilíneas viales vectoriales (Recorrido negro, Restante gris) ──
     const features = [];
-    envios.forEach((envio) => {
+    filteredEnvios.forEach((envio) => {
       const coords = roadRoutes[envio.id_envio];
       if (!coords || coords.length === 0) return;
 
       const isSelected = selectedForMap?.id_envio === envio.id_envio;
+
+      // Si hay un envío seleccionado, solo dibujamos la ruta de ese envío
+      if (selectedForMap) {
+        if (!isSelected) return;
+      } else {
+        // Si no hay selección, solo dibujamos las rutas de los envíos que están en camino
+        if (!isEnCamino(envio)) return;
+      }
 
       if (isSelected) {
         // Encontrar coordenadas del camión
@@ -1264,57 +1516,70 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
     markersRef.current = [];
 
     // ── 3. Dibujar nuevos marcadores (Checkpoints, Camión y Rupturas) ──
-    envios.forEach((envio) => {
-      const route = generateRoute(envio);
+    filteredEnvios.forEach((envio) => {
       const isSelected = selectedForMap?.id_envio === envio.id_envio;
 
-      // Puntos de la ruta
-      route.forEach((point) => {
-        const lat = point.lat !== undefined ? point.lat : toLatLng(point.x, point.y).lat;
-        const lng = point.lng !== undefined ? point.lng : toLatLng(point.x, point.y).lng;
+      // Si hay un envío seleccionado, solo dibujamos marcadores para ese envío
+      if (selectedForMap) {
+        if (!isSelected) return;
+      } else {
+        // Si no hay selección, solo procesamos los envíos que están en camino
+        if (!isEnCamino(envio)) return;
+      }
 
-        const markerEl = document.createElement("div");
-        markerEl.className = "custom-marker";
-        if (point.type === "inicio") {
-          markerEl.classList.add("marker-origen");
-        } else if (point.type === "fin") {
-          markerEl.classList.add("marker-destino");
-        } else {
-          markerEl.classList.add("marker-checkpoint");
-        }
+      const route = generateRoute(envio);
 
-        const tooltip = new window.maplibregl.Popup({
-          offset: 10,
-          closeButton: false,
-          closeOnClick: false,
-          className: "tooltip-popup"
-        });
-
-        markerEl.addEventListener("mouseenter", () => {
-          tooltip.setLngLat([lng, lat])
-            .setHTML(`<div class="custom-tooltip-content">${point.label} — Envío #${envio.id_envio}</div>`)
-            .addTo(map);
-        });
-        markerEl.addEventListener("mouseleave", () => {
-          tooltip.remove();
-        });
-
-        // Evento click para seleccionar envío
-        markerEl.addEventListener("click", (e) => {
-          e.stopPropagation();
-          onSelectEnvio(envio);
-        });
-
-        const markerObj = new window.maplibregl.Marker({ element: markerEl })
-          .setLngLat([lng, lat])
-          .addTo(map);
-        markersRef.current.push(markerObj);
-      });
-
-      // Camión logístico en tránsito (solo para el envío seleccionado)
+      // Puntos de la ruta (Solo si el envío está seleccionado)
       if (isSelected) {
-        const telemetryLat = toNumber(telemetry?.latitud);
-        const telemetryLng = toNumber(telemetry?.longitud);
+        route.forEach((point) => {
+          const lat = point.lat !== undefined ? point.lat : toLatLng(point.x, point.y).lat;
+          const lng = point.lng !== undefined ? point.lng : toLatLng(point.x, point.y).lng;
+
+          const markerEl = document.createElement("div");
+          markerEl.className = "custom-marker";
+          if (point.type === "inicio") {
+            markerEl.classList.add("marker-origen");
+          } else if (point.type === "fin") {
+            markerEl.classList.add("marker-destino");
+          } else {
+            markerEl.classList.add("marker-checkpoint");
+          }
+
+          const tooltip = new window.maplibregl.Popup({
+            offset: 10,
+            closeButton: false,
+            closeOnClick: false,
+            className: "tooltip-popup"
+          });
+
+          markerEl.addEventListener("mouseenter", () => {
+            tooltip.setLngLat([lng, lat])
+              .setHTML(`<div class="custom-tooltip-content">${point.label} — Envío #${envio.id_envio}</div>`)
+              .addTo(map);
+          });
+          markerEl.addEventListener("mouseleave", () => {
+            tooltip.remove();
+          });
+
+          // Evento click para seleccionar envío
+          markerEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+            onSelectEnvio(envio);
+          });
+
+          const markerObj = new window.maplibregl.Marker({ element: markerEl })
+            .setLngLat([lng, lat])
+            .addTo(map);
+          markersRef.current.push(markerObj);
+        });
+      }
+
+      // Camión logístico en tránsito: se muestra si está seleccionado, o si no hay selección y el envío está activo
+      const showTruck = isSelected || (!selectedForMap && isEnCamino(envio));
+      if (showTruck) {
+        const currentTelemetry = isSelected ? telemetry : allTelemetry[envio.id_envio];
+        const telemetryLat = toNumber(currentTelemetry?.latitud);
+        const telemetryLng = toNumber(currentTelemetry?.longitud);
 
         if (telemetryLat !== null && telemetryLng !== null) {
           const wrapper = document.createElement("div");
@@ -1338,11 +1603,17 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
 
           wrapper.addEventListener("mouseenter", () => {
             tooltip.setLngLat([telemetryLng, telemetryLat])
-              .setHTML(`<div class="custom-tooltip-content">Posición actual</div>`)
+              .setHTML(`<div class="custom-tooltip-content">${envio.codigo_rastreo || `Envío #${envio.id_envio}`} (Posición actual)</div>`)
               .addTo(map);
           });
           wrapper.addEventListener("mouseleave", () => {
             tooltip.remove();
+          });
+
+          // Al hacer clic en el camión, se selecciona el envío
+          wrapper.addEventListener("click", (e) => {
+            e.stopPropagation();
+            onSelectEnvio(envio);
           });
 
           const markerObj = new window.maplibregl.Marker({ element: wrapper })
@@ -1378,11 +1649,16 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
 
             wrapper.addEventListener("mouseenter", () => {
               tooltip.setLngLat([fallbackLng, fallbackLat])
-                .setHTML(`<div class="custom-tooltip-content">Posición actual (Simulado)</div>`)
+                .setHTML(`<div class="custom-tooltip-content">${envio.codigo_rastreo || `Envío #${envio.id_envio}`} (Simulado)</div>`)
                 .addTo(map);
             });
             wrapper.addEventListener("mouseleave", () => {
               tooltip.remove();
+            });
+
+            wrapper.addEventListener("click", (e) => {
+              e.stopPropagation();
+              onSelectEnvio(envio);
             });
 
             const markerObj = new window.maplibregl.Marker({ element: wrapper })
@@ -1392,8 +1668,8 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
           }
         }
 
-        // ── Marcadores de incidentes de temperatura (Rupturas) ──
-        if (rupturas && rupturas.length > 0) {
+        // ── Marcadores de incidentes de temperatura (Rupturas) - Solo si está seleccionado ──
+        if (isSelected && rupturas && rupturas.length > 0) {
           rupturas.forEach((r) => {
             const lat = toNumber(r.latitud);
             const lng = toNumber(r.longitud);
@@ -1410,7 +1686,7 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
                   <h4 style="margin: 0 0 8px 0; color: #dc2626; border-bottom: 1px solid #fecaca; padding-bottom: 4px; font-size: 0.9rem; font-weight: bold;">
                     ⚠️ Detalle de Incidente
                   </h4>
-                  <div style="font-size: 0.8rem; color: #334155; display: flex; flex-direction: column; gap: 4px;">
+                  <div style="font-size: 0.8rem; color: #ffffff; display: flex; flex-direction: column; gap: 4px;">
                     <div style="display: flex; justify-content: space-between; gap: 8px;">
                       <strong>Temperatura:</strong> <span style="color: #dc2626; font-weight: bold;">${temp}°C</span>
                     </div>
@@ -1471,7 +1747,63 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
         }
       }
     });
-  }, [mapReady, mapLoaded, envios, selectedForMap, telemetry, generateRoute, onSelectEnvio, rupturas, roadRoutes]);
+
+    // ── 4. Dibujar marcadores de incidentes globales (solo si hay selección y pertenecen a ella) ──
+    incidents.forEach((incident) => {
+      if (!selectedForMap || String(incident.id_envio) !== String(selectedForMap.id_envio)) return;
+
+      const lat = toNumber(incident.latitud);
+      const lng = toNumber(incident.longitud);
+      if (lat === null || lng === null) return;
+
+      const isActiveIncident = selectedIncident?.id_incidente === incident.id_incidente;
+      const markerEl = document.createElement("div");
+      markerEl.className = `custom-marker marker-incident${isActiveIncident ? " marker-incident--selected" : ""}`;
+
+      const tooltip = new window.maplibregl.Popup({
+        offset: 12,
+        closeButton: false,
+        closeOnClick: false,
+        className: "tooltip-popup"
+      });
+
+      markerEl.addEventListener("mouseenter", () => {
+        tooltip.setLngLat([lng, lat])
+          .setHTML(`
+            <div class="custom-tooltip-content">
+              <strong>${getIncidentTypeLabel(incident.tipo_incidente) || "Incidente"}</strong><br />
+              Envío #${incident.id_envio}<br />
+              ${incident.fecha_incidente ? new Date(incident.fecha_incidente).toLocaleString() : "Fecha desconocida"}
+            </div>
+          `)
+          .addTo(map);
+      });
+
+      markerEl.addEventListener("mouseleave", () => {
+        tooltip.remove();
+      });
+
+      markerEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (onSelectIncident) {
+          onSelectIncident(incident);
+        }
+      });
+
+      const markerObj = new window.maplibregl.Marker({ element: markerEl })
+        .setLngLat([lng, lat])
+        .addTo(map);
+      markersRef.current.push(markerObj);
+    });
+  }, [mapReady, mapLoaded, filteredEnvios, selectedForMap, telemetry, generateRoute, onSelectEnvio, rupturas, roadRoutes, incidents, selectedIncident, onSelectIncident]);
+
+  // ── Si se selecciona un incidente, centrar el mapa en su ubicación ─────────
+  useEffect(() => {
+    const lat = toNumber(selectedIncident?.latitud);
+    const lng = toNumber(selectedIncident?.longitud);
+    if (!mapReady || !mapRef.current || lat === null || lng === null) return;
+    mapRef.current.easeTo({ center: [lng, lat], zoom: 13, duration: 800 });
+  }, [mapReady, selectedIncident]);
 
   // ── Si llega telemetría real con lat/lng, mover cámara suavemente ────────────
   useEffect(() => {
@@ -1481,17 +1813,6 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
     mapRef.current.panTo([lng, lat]);
   }, [mapReady, telemetry]);
 
-  // Filtramos los envíos por el término de búsqueda
-  const filteredEnvios = envios.filter((envio) => {
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      String(envio.id_envio || "").includes(searchLower) ||
-      (envio.codigo_rastreo && envio.codigo_rastreo.toLowerCase().includes(searchLower)) ||
-      (envio.tipo_mercancia && envio.tipo_mercancia.toLowerCase().includes(searchLower)) ||
-      (envio.origen && envio.origen.toLowerCase().includes(searchLower)) ||
-      (envio.destino && envio.destino.toLowerCase().includes(searchLower))
-    );
-  });
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1534,7 +1855,178 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
       </div>
 
       {/* Tarjetas de envíos */}
-      <div className="envio-cards-row">
+      <div className="envio-cards-row" style={{ display: "flex", gap: "14px", overflowX: "auto", padding: "16px 18px" }}>
+        
+        {/* Tarjeta de Filtros Estática */}
+        <div className="envio-card filter-card-static" style={{
+          background: "#ffffff",
+          color: "#0f172a",
+          border: "1.5px solid #cbd5e1",
+          cursor: "default",
+          minWidth: "290px",
+          flex: "0 0 290px",
+          padding: "12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)"
+        }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", paddingBottom: "6px" }}>
+            <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "#0284c7", display: "flex", alignItems: "center", gap: "6px" }}>
+              🔍 Filtros Logísticos
+            </span>
+            <button 
+              onClick={handleClearFilters}
+              disabled={!(filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident)}
+              style={{
+                background: (filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident) ? "#ef4444" : "#f1f5f9",
+                color: (filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident) ? "#ffffff" : "#94a3b8",
+                border: "1px solid " + ((filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident) ? "#ef4444" : "#cbd5e1"),
+                padding: "3px 8px",
+                borderRadius: "6px",
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                cursor: (filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident) ? "pointer" : "not-allowed",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                if (filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident) {
+                  e.target.style.background = "#dc2626";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (filterStartDate || filterEndDate || filterVehicle || filterRoute || filterIncident) {
+                  e.target.style.background = "#ef4444";
+                }
+              }}
+            >
+              Limpiar ✕
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", overflowY: "auto", flex: 1, paddingRight: "2px" }}>
+            {/* Filtro Vehículo */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <label style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700 }}>🚚 VEHÍCULO / CAMIÓN</label>
+              <select
+                value={filterVehicle}
+                onChange={(e) => setFilterVehicle(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "5px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: "0.75rem",
+                  outline: "none"
+                }}
+              >
+                <option value="">Todos los vehículos</option>
+                {vehiculos.map(v => (
+                  <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                    {v.placa} (#{v.id_vehiculo})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtro Ruta */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <label style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700 }}>🗺️ RUTA LOGÍSTICA</label>
+              <select
+                value={filterRoute}
+                onChange={(e) => setFilterRoute(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "5px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: "0.75rem",
+                  outline: "none"
+                }}
+              >
+                <option value="">Todas las rutas</option>
+                {rutas.map(r => (
+                  <option key={r.id_ruta} value={r.id_ruta}>
+                    {r.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtro Incidente */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <label style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700 }}>⚠️ ESTADO DE INCIDENTE</label>
+              <select
+                value={filterIncident}
+                onChange={(e) => setFilterIncident(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "5px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: "0.75rem",
+                  outline: "none"
+                }}
+              >
+                <option value="">Cualquier estado</option>
+                <option value="con_incidente">⚠️ Con Incidentes (Cualquiera)</option>
+                <option value="sin_incidente">✅ Sin Incidentes</option>
+                <option value="ruptura_frio">🌡️ Rupturas de Cadena de Frío</option>
+                <option value="bateria_baja">🔋 Batería Baja</option>
+                <option value="desvio_ruta">🗺️ Desvíos de Ruta (Geofence)</option>
+              </select>
+            </div>
+
+            {/* Rango de Fechas */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <label style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700 }}>📅 DESDE</label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "4px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    color: "#0f172a",
+                    fontSize: "0.7rem",
+                    outline: "none"
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <label style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700 }}>📅 HASTA</label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "4px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    color: "#0f172a",
+                    fontSize: "0.7rem",
+                    outline: "none"
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {/* Tarjetas de envíos filtrados */}
         {filteredEnvios.map((envio) => (
           <EnvioCard
             key={envio.id_envio}
@@ -1544,8 +2036,8 @@ export default function MapContainer({ selectedEnvio, onSelectEnvio, rupturas = 
           />
         ))}
         {filteredEnvios.length === 0 && (
-          <div style={{ padding: "10px 20px", color: "#64748b", fontSize: "0.9rem", fontStyle: "italic" }}>
-            No se encontraron envíos para tu búsqueda.
+          <div style={{ padding: "10px 20px", color: "#64748b", fontSize: "0.9rem", fontStyle: "italic", alignSelf: "center" }}>
+            No se encontraron envíos para el filtro aplicado.
           </div>
         )}
       </div>

@@ -49,16 +49,16 @@ export default function Navbar({
       </div>
 
       {/* Centro - Nav + Indicador LIVE */}
-<div className="navbar-center">
-  <nav className="app-nav">
-    <Link to="/" className="app-nav-link">⚙ Simulador</Link>
-    <Link to="/dashboard" className="app-nav-link active">🗺 Dashboard</Link>
-  </nav>
-  <div className="live-indicator">
-    <span className="live-dot"></span>
-    <span className="live-text">EN VIVO</span>
-  </div>
-</div>
+      <div className="navbar-center">
+        <nav className="app-nav">
+          <Link to="/" className="app-nav-link">⚙ Simulador</Link>
+          <Link to="/dashboard" className="app-nav-link active">🗺 Dashboard</Link>
+        </nav>
+        <div className="live-indicator">
+          <span className="live-dot"></span>
+          <span className="live-text">EN VIVO</span>
+        </div>
+      </div>
 
       {/* Derecha */}
       <div className="navbar-right">

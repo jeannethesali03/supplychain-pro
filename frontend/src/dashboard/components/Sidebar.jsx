@@ -7,10 +7,10 @@ import "../styles/sidebar.css";
 
 const menuItems = [
   { id: "dashboard", label: "Dashboard", icon: "📊" },
-  //{ id: "monitoreo", label: "Monitoreo", icon: "🚚" },
+  { id: "monitoreo", label: "Monitoreo", icon: "🚚" },
   { id: "incidentes", label: "Incidentes", icon: "⚠️" },
-  //{ id: "historial", label: "Historial", icon: "📋" },
-  //{ id: "configuracion", label: "Configuración", icon: "⚙️" },
+  { id: "historial", label: "Historial", icon: "📋" },
+  { id: "configuracion", label: "Estadísticas", icon: "📊" },
 ];
 
 export default function Sidebar({ collapsed, onToggle, activeView, onViewChange }) {
